@@ -1,0 +1,12 @@
+[project]
+name = "practicas"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.9",
+    "nbconvert>=7.17.1",
+    "scikit-image>=0.26.0",
+]
