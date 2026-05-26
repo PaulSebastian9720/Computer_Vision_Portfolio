@@ -1,0 +1,6 @@
+CompileFlags:
+  Add: [
+    "-I/usr/include/opencv4",
+    "-I/usr/include/c++/13",
+    "-I/usr/include/c++/13/x86_64-pc-linux-gnu"
+  ]
