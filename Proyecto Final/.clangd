@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - "-I/home/paul/Aplicaciones/opencv/install/include/opencv4"
+    - "-I/home/paul/universidad/septimo_v2/Vison_Computador/Practicas/Proyecto Final/include"
+    - "-std=c++17"
