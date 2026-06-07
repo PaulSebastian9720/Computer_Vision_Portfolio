@@ -3,12 +3,10 @@
 
 namespace DesktopUI {
 
-// Main monitoring window: 3 side-by-side panels (left cam, right cam, disparity).
-void renderMainWindow(const cv::Mat& leftRect,
-                      const cv::Mat& rightRect,
-                      const cv::Mat& dispColor);
-
-// Secondary output window: color rectified frame with distance overlay.
-void renderOutputWindow(const cv::Mat& colorRect, float distanceCm);
+// Single combined window: left panel = camera + crosshair + Z Raw + Z Kalman,
+// right panel = disparity map (JET colormap). dispColor may be empty.
+// zRawCm / zKalmanCm <= 0 → show "---".
+void render(const cv::Mat& leftRect, const cv::Mat& dispColor,
+            float zRawCm, float zKalmanCm);
 
 } // namespace DesktopUI
