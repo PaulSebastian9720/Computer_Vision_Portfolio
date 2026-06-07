@@ -13,7 +13,7 @@ URL_DER = "http://192.168.0.118:81/stream"
 
 FILAS = 6          
 COLUMNAS = 9       
-TAMANO_CUADRADO = 10.0  
+TAMANO_CUADRADO = 26.0
 
 os.makedirs("capturas/izquierda", exist_ok=True)
 os.makedirs("capturas/derecha", exist_ok=True)
