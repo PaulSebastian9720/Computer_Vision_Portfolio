@@ -1,24 +1,23 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 
-// ===================
-// Select camera model
-// ===================
-#define CAMERA_MODEL_AI_THINKER // Has PSRAM
+// ============================================================
+// Board: AI-Thinker ESP32-CAM (pines originales via camera_pins.h)
+// Módulo de cámara: OV2640 (ya sea el original o el del XIAO Sense)
+// ============================================================
+#define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
 
 // ===========================
-// Enter your WiFi credentials
+// Credenciales WiFi
 // ===========================
 const char *ssid     = "Telecable-Fibra Naspud Vivar";
 const char *password = "#.TEFY9728.";
 
-// ─── STEREO MANUAL EXPOSURE PARAMS ───────────────────────────────────────────
-// Flash the SAME values to BOTH cameras.
-// Procedure: let one camera run in auto mode, read the values it settled on
-// under the lab lighting, then hardcode those values here for both units.
+// ─── PARÁMETROS DE EXPOSICIÓN MANUAL ESTÉREO ─────────────────────────────────
+// Flashear los MISMOS valores en las DOS unidades.
 static constexpr int FIXED_AGC_GAIN  = 5;    // 0–30
-static constexpr int FIXED_AEC_VALUE = 400;  // 0–1200
+static constexpr int FIXED_AEC_VALUE = 600;  // 0–1200  (≈3 ciclos de 60Hz en VGA 15fps → menos banding)
 // ─────────────────────────────────────────────────────────────────────────────
 
 void startCameraServer();
@@ -49,18 +48,16 @@ void setup() {
   config.pin_pwdn     = PWDN_GPIO_NUM;
   config.pin_reset    = RESET_GPIO_NUM;
 
-  // 10 MHz: mejor estabilidad de paquetes en red vs 20 MHz.
-  // Bajar a 8 MHz si siguen apareciendo frames corruptos.
-  config.xclk_freq_hz = 10000000;
+  // 8 MHz: reduce ruido eléctrico del sensor → menos rayas horizontales.
+  config.xclk_freq_hz = 8000000;
 
-  config.frame_size   = FRAMESIZE_VGA;
+  config.frame_size   = FRAMESIZE_VGA;    // 640×480
   config.pixel_format = PIXFORMAT_JPEG;
   config.grab_mode    = CAMERA_GRAB_LATEST;
   config.fb_location  = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 10;  // 10 vs 14: menos compresión = menos artefactos de bloque
+  config.jpeg_quality = 8;
   config.fb_count     = 2;
 
-  // Si no hay PSRAM disponible, usar DRAM con buffer único
   if (config.pixel_format == PIXFORMAT_JPEG && !psramFound()) {
     config.fb_location = CAMERA_FB_IN_DRAM;
     config.fb_count    = 1;
@@ -68,37 +65,40 @@ void setup() {
 
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Camera init failed with error 0x%x\n", err);
+    Serial.printf("Camera init failed: 0x%x\n", err);
     return;
   }
 
   sensor_t *s = esp_camera_sensor_get();
 
-  // Correcciones específicas para el sensor OV3660
+  // OV3660 specific fixes (si aplica)
   if (s->id.PID == OV3660_PID) {
     s->set_vflip(s, 1);
     s->set_brightness(s, 1);
     s->set_saturation(s, -2);
   }
 
-#if defined(CAMERA_MODEL_M5STACK_WIDE) || defined(CAMERA_MODEL_M5STACK_ESP32CAM)
-  s->set_vflip(s, 1);
-  s->set_hmirror(s, 1);
-#endif
-
   // ─── PARIDAD LUMÍNICA ESTÉREO ─────────────────────────────────────────────
-  // Deshabilitar TODOS los controles automáticos para que ambas cámaras
-  // produzcan la misma exposición y no introduzcan discrepancias fotométricas
-  // que engañen al algoritmo de block matching.
-  s->set_exposure_ctrl(s, 0);   // Deshabilitar AEC
-  s->set_gain_ctrl(s, 0);       // Deshabilitar AGC
-  s->set_whitebal(s, 0);        // Deshabilitar balance de blancos automático
-  s->set_awb_gain(s, 0);        // Deshabilitar ganancia AWB
+  // Desactivar TODOS los automáticos — ambas cámaras deben ver idéntico.
+  s->set_exposure_ctrl(s, 0);
+  s->set_gain_ctrl(s, 0);
+  s->set_whitebal(s, 0);
+  s->set_awb_gain(s, 0);
 
-  // Fijar valores manuales idénticos en ambas unidades
   s->set_aec_value(s, FIXED_AEC_VALUE);
   s->set_agc_gain(s, FIXED_AGC_GAIN);
-  s->set_wb_mode(s, 0);         // Modo de iluminación fijo (0 = Auto desactivado)
+  s->set_wb_mode(s, 0);
+
+  s->set_brightness(s, 0);
+  s->set_contrast(s, 0);
+  s->set_saturation(s, 0);
+  s->set_sharpness(s, 0);
+
+  // Aplicar AEC_VALUE dos veces: el driver OV2640 a veces ignora el primer write
+  // porque los registros se actualizan en el siguiente VSYNC.
+  delay(100);
+  s->set_aec_value(s, FIXED_AEC_VALUE);
+  s->set_agc_gain(s, FIXED_AGC_GAIN);
   // ─────────────────────────────────────────────────────────────────────────
 
 #if defined(LED_GPIO_NUM)
@@ -112,13 +112,13 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWiFi connected");
+  Serial.println("\nWiFi conectado");
 
   startCameraServer();
 
-  Serial.print("Camera Ready! Use 'http://");
+  Serial.print("Camara lista: http://");
   Serial.print(WiFi.localIP());
-  Serial.println("' to connect");
+  Serial.println("/stream");
 }
 
 void loop() {
