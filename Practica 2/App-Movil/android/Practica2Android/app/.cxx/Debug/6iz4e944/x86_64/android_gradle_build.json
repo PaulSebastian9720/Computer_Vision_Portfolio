@@ -1,0 +1,38 @@
+{
+  "buildFiles": [
+    "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/jennyfer/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/6iz4e944/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/jennyfer/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/6iz4e944/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "practica2::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "x86_64",
+      "artifactName": "practica2",
+      "output": "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/6iz4e944/obj/x86_64/libpractica2.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/Users/jennyfer/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/Users/jennyfer/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

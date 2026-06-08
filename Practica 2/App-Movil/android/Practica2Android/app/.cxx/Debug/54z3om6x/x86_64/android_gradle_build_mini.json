@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/jennyfer/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/54z3om6x/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/jennyfer/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/54z3om6x/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "practica2::@6890427a1f51a3e7e1df": {
+      "artifactName": "practica2",
+      "abi": "x86_64",
+      "output": "/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/x86_64/libpractica2.so",
+      "runtimeFiles": []
+    }
+  }
+}

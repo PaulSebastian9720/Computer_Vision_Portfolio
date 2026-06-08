@@ -1,0 +1,18 @@
+# ninja log v5
+0	348	1780847578158979200	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+349	548	1780847578352517131	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852
+0	4	0	clean	34e3b747eb9109b7
+2	418	1780847753603930916	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+418	657	1780847753835198871	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852
+0	8	0	clean	34e3b747eb9109b7
+2	674	1780848317789724490	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+674	938	1780848318047874282	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852
+0	6	0	clean	34e3b747eb9109b7
+2	587	1780849192358339366	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+587	889	1780849192653451047	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852
+3	811	1780871199770401448	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+811	1101	1780871200057211043	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852
+0	7	0	clean	34e3b747eb9109b7
+0	4	0	clean	34e3b747eb9109b7
+1	408	1780882815210385057	CMakeFiles/practica2.dir/native-lib.cpp.o	58a5c137f2d047ba
+409	627	1780882815422449855	/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/54z3om6x/obj/armeabi-v7a/libpractica2.so	789520191193852

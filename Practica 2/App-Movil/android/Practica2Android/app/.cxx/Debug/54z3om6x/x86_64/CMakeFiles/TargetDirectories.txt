@@ -1,0 +1,3 @@
+/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/54z3om6x/x86_64/CMakeFiles/practica2.dir
+/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/54z3om6x/x86_64/CMakeFiles/edit_cache.dir
+/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/54z3om6x/x86_64/CMakeFiles/rebuild_cache.dir
