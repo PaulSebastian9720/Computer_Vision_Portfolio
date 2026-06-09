@@ -275,10 +275,6 @@ int main(int argc, char** argv) {
 
                 lRectLast = lRect;
 
-                // Hand detection on left camera frame → uses stereo Z
-                if (arEnabled)
-                    hands = handTracker.update(lRect, 2);
-
                 hasDisp = true;
                 renderNeeded = true;
             }
@@ -295,6 +291,10 @@ int main(int argc, char** argv) {
 
             cv::Mat lScaled, dScaled;
             cv::resize(left, lScaled, cv::Size(DISP_W / 2, DISP_H));
+
+            // Hand detection on display-resolution frame so coords match render target
+            if (arEnabled)
+                hands = handTracker.update(lScaled, 2);
 
             // AR filter overlay — usa el Z filtrado del pipeline estéreo
             if (arEnabled && !hands.empty())

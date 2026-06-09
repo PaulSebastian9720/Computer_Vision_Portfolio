@@ -27,23 +27,8 @@ float zToIntensity(float zCm) {
 }
 
 // ─── Finger check ────────────────────────────────────────────────────────────
-bool isHandOpen(const HandTracker::Hand& h, bool isRight) {
-    // Fingers: tip/pip pairs
-    const int tips[] = {8, 12, 16, 20};
-    const int pips[] = {6, 10, 14, 18};
-    int extended = 0;
-
-    for (int i = 0; i < 4; ++i)
-        if (h.lm[tips[i]].y < h.lm[pips[i]].y)
-            ++extended;
-
-    // Thumb (uses X axis)
-    if (isRight) {
-        if (h.lm[4].x < h.lm[3].x) ++extended;
-    } else {
-        if (h.lm[4].x > h.lm[3].x) ++extended;
-    }
-    return extended >= 4;
+bool isHandOpen(const HandTracker::Hand& /*h*/, bool /*isRight*/) {
+    return true;
 }
 
 // ─── Sigil ────────────────────────────────────────────────────────────────────
@@ -231,27 +216,10 @@ float render(cv::Mat& frame,
         infos.push_back(inf);
     }
 
-    // Draw skeleton landmarks
-    for (const auto& h : hands) {
-        // Draw all 21 landmarks as dots
-        for (int i = 0; i < 21; ++i) {
-            cv::circle(frame,
-                       {(int)h.lm[i].x, (int)h.lm[i].y},
-                       3, cv::Scalar(0, 200, 200), -1);
-        }
-        // Palm center dot
-        cv::circle(frame, h.palmCenter, 5, cv::Scalar(0, 255, 255), -1);
-    }
-
     // Sigilos individuales
     for (const auto& inf : infos) {
-        if (inf.open) {
+        if (inf.open)
             drawSigil(frame, inf.center, inf.radius, inf.intensity, angleDeg);
-            cv::putText(frame, "SIGILO ACTIVADO",
-                        {inf.center.x - 70, inf.center.y + inf.radius + 22},
-                        cv::FONT_HERSHEY_SIMPLEX, 0.55,
-                        cv::Scalar(0, 255, 255), 1);
-        }
     }
 
     // Portal entre dos manos abiertas

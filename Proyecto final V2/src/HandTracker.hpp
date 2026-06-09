@@ -22,8 +22,8 @@ public:
     // lmOnnx     : models/hand_landmark.onnx   (224×224 input)
     bool load(const std::string& palmOnnx,
               const std::string& lmOnnx,
-              float detThresh = 0.5f,
-              float nmsThresh = 0.3f);
+              float detThresh = 0.40f,
+              float nmsThresh = 0.30f);
 
     bool isLoaded() const { return loaded_; }
 

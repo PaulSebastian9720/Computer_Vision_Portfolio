@@ -122,8 +122,8 @@ std::vector<Detection> ObjectDetector::postprocessV5(const cv::Mat& raw,
 // YOLOv8: output [1, 4+nc, 8400]  (transposed vs v5)
 std::vector<Detection> ObjectDetector::postprocessV8(const cv::Mat& raw,
                                                        int origW, int origH) {
-    // Reshape to [4+nc, 8400] then transpose to [8400, 4+nc]
-    cv::Mat t = raw.reshape(1, raw.size[1]);  // [4+nc, 8400]
+    // raw is [1, 4+nc, 8400] — create 2D view then transpose
+    cv::Mat t((int)raw.size[1], (int)raw.size[2], CV_32F, (void*)raw.data);
     cv::Mat data;
     cv::transpose(t, data);                   // [8400, 4+nc]
 

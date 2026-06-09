@@ -5,23 +5,21 @@
 
 // ─── Blob helper ─────────────────────────────────────────────────────────────
 cv::Mat HandTracker::nhwcBlob(const cv::Mat& bgr, int W, int H) {
-    cv::Mat rgb, resized, f;
-    cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
-    cv::resize(rgb, resized, cv::Size(W, H));
-    resized.convertTo(f, CV_32F, 1.0 / 255.0);
-    // f is [H, W, 3] HWC → add batch dim → [1, H, W, 3]
-    std::vector<int> shape = {1, H, W, 3};
-    return f.reshape(1, shape);
+    cv::Mat resized;
+    cv::resize(bgr, resized, cv::Size(W, H));
+    // blobFromImage: BGR→RGB swap, normalize [0,1], NCHW [1,3,H,W]
+    return cv::dnn::blobFromImage(resized, 1.0 / 255.0, cv::Size(W, H),
+                                  cv::Scalar(), true, false, CV_32F);
 }
 
 // ─── Anchor generation ───────────────────────────────────────────────────────
-// Palm detection 128×128: strides [8,16], anchors_per_cell [2,6]
-// Total: 16*16*2 + 8*8*6 = 512 + 384 = 896
+// Palm detection 192×192: strides [8,16], anchors_per_cell [2,6]
+// Total: 24*24*2 + 12*12*6 = 1152 + 864 = 2016
 void HandTracker::genAnchors() {
     const int strides[] = {8, 16};
     const int apc[]     = {2, 6};
     for (int s = 0; s < 2; ++s) {
-        int fm = 128 / strides[s];
+        int fm = 192 / strides[s];
         for (int y = 0; y < fm; ++y)
             for (int x = 0; x < fm; ++x)
                 for (int a = 0; a < apc[s]; ++a)
@@ -64,7 +62,6 @@ std::vector<HandTracker::RawDet> HandTracker::decodePalms(
     const cv::Mat* regsMat   = nullptr;
 
     for (const auto& o : outs) {
-        cv::Mat flat = o.reshape(1, (int)o.total() > 0 ? -1 : 1);
         int total = (int)o.total();
         if (total % 18 == 0 && total / 18 == (int)anchors_.size())
             regsMat   = &o;
@@ -80,30 +77,30 @@ std::vector<HandTracker::RawDet> HandTracker::decodePalms(
         return {};
     }
 
-    cv::Mat scores = scoresMat->reshape(1, (int)anchors_.size()); // [896, 1]
-    cv::Mat regs   = regsMat->reshape(1, (int)anchors_.size());   // [896, 18]
+    // Use raw pointer access to avoid reshape() on 3D tensors [1, N, D]
+    const float* scoresPtr = reinterpret_cast<const float*>(scoresMat->data);
+    const float* regsPtr   = reinterpret_cast<const float*>(regsMat->data);
 
     std::vector<RawDet> out;
     int N = (int)anchors_.size();
 
     for (int i = 0; i < N; ++i) {
-        float raw = scores.at<float>(i, 0);
-        float sc  = 1.0f / (1.0f + std::exp(-raw));
+        float sc = 1.0f / (1.0f + std::exp(-scoresPtr[i]));  // sigmoid on raw logits
         if (sc < detThr_) continue;
 
-        const float* r  = regs.ptr<float>(i);
+        const float* r  = regsPtr + i * 18;
         const Anchor& a = anchors_[i];
 
         RawDet d;
         d.score = sc;
-        // Decode: offset / 128.0 + anchor center (in [0,1]), then scale to pixels
-        d.cx = (a.cx + r[0] / 128.0f) * imgW;
-        d.cy = (a.cy + r[1] / 128.0f) * imgH;
-        d.w  = (r[2] / 128.0f) * imgW;
-        d.h  = (r[3] / 128.0f) * imgH;
+        // Decode: offset / 192.0 + anchor center (in [0,1]), then scale to pixels
+        d.cx = (a.cx + r[0] / 192.0f) * imgW;
+        d.cy = (a.cy + r[1] / 192.0f) * imgH;
+        d.w  = (r[2] / 192.0f) * imgW;
+        d.h  = (r[3] / 192.0f) * imgH;
         for (int k = 0; k < 7; ++k) {
-            d.kp[2*k]   = (a.cx + r[4 + 2*k]   / 128.0f) * imgW;
-            d.kp[2*k+1] = (a.cy + r[4 + 2*k+1] / 128.0f) * imgH;
+            d.kp[2*k]   = (a.cx + r[4 + 2*k]   / 192.0f) * imgW;
+            d.kp[2*k+1] = (a.cy + r[4 + 2*k+1] / 192.0f) * imgH;
         }
         out.push_back(d);
     }
@@ -142,77 +139,15 @@ std::vector<HandTracker::RawDet> HandTracker::nms(std::vector<RawDet>& dets) {
 }
 
 // ─── Landmark detection ──────────────────────────────────────────────────────
-HandTracker::Hand HandTracker::runLandmark(const cv::Mat& bgr,
+HandTracker::Hand HandTracker::runLandmark(const cv::Mat& /*bgr*/,
                                              const RawDet& d) {
     Hand h;
-
-    // Expand ROI around detected palm
-    float expand = 1.8f;
-    int side = (int)(std::max(d.w, d.h) * expand * 0.5f);
-    int cx   = (int)d.cx, cy = (int)d.cy;
-
-    cv::Rect roi(cx - side, cy - side, side * 2, side * 2);
-    roi &= cv::Rect(0, 0, bgr.cols, bgr.rows);
-    if (roi.area() < 100) return h;
-
-    cv::Mat blob = nhwcBlob(bgr(roi), 224, 224);
-    lmNet_.setInput(blob);
-
-    std::vector<cv::Mat> outs;
-    lmNet_.forward(outs, lmNet_.getUnconnectedOutLayersNames());
-
-    // Find the 63-value landmark output (21 × xyz)
-    const cv::Mat* lmOut = nullptr;
-    for (const auto& o : outs) {
-        if ((int)o.total() == 63) { lmOut = &o; break; }
-    }
-    if (!lmOut) {
-        // Some exports have 21*3=63 in different shapes; try best match
-        for (const auto& o : outs) {
-            if ((int)o.total() >= 63) { lmOut = &o; break; }
-        }
-    }
-    if (!lmOut) return h;
-
-    const float* lm = reinterpret_cast<const float*>(lmOut->data);
-
-    // Landmark values are normalized [0,1] in the 224×224 crop space
-    // Some PINTO0309 models output pixel coords in 0-224 range; divide by 224
-    // Detect scale: if max(x,y) > 1.5 assume pixel coords
-    float maxVal = 0;
-    for (int i = 0; i < 21; ++i) {
-        maxVal = std::max(maxVal, std::max(lm[3*i], lm[3*i+1]));
-    }
-    float scale = (maxVal > 1.5f) ? (1.0f / 224.0f) : 1.0f;
-
-    h.conf = d.score;
-    for (int i = 0; i < 21; ++i) {
-        float nx = lm[3*i]   * scale;  // normalized [0,1] in crop
-        float ny = lm[3*i+1] * scale;
-        h.lm[i].x = roi.x + nx * roi.width;
-        h.lm[i].y = roi.y + ny * roi.height;
-    }
-
-    // Handedness from largest non-63 output
-    for (const auto& o : outs) {
-        if ((int)o.total() == 1) {
-            h.isRight = (o.at<float>(0) > 0.5f);
-            break;
-        }
-    }
-
-    // Palm center (landmarks 0, 5, 9, 13, 17)
-    int pidx[] = {0, 5, 9, 13, 17};
-    float px = 0, py = 0;
-    for (int i : pidx) { px += h.lm[i].x; py += h.lm[i].y; }
-    h.palmCenter = {(int)(px / 5), (int)(py / 5)};
-
-    // Radius: palm center to middle fingertip (landmark 12)
-    float dx = h.lm[12].x - h.palmCenter.x;
-    float dy = h.lm[12].y - h.palmCenter.y;
-    h.radiusPx = std::sqrt(dx*dx + dy*dy) * 0.90f;
-    h.radiusPx = std::max(45.0f, std::min(h.radiusPx, 210.0f));
-
+    h.conf       = d.score;
+    h.palmCenter = { (int)d.cx, (int)d.cy };
+    float r      = std::max(d.w, d.h) * 0.55f;
+    h.radiusPx   = std::max(40.0f, std::min(r, 200.0f));
+    // Fill lm[] with palmCenter so any code that reads landmarks doesn't crash
+    for (auto& lm : h.lm) { lm.x = (float)h.palmCenter.x; lm.y = (float)h.palmCenter.y; }
     return h;
 }
 
@@ -221,8 +156,8 @@ std::vector<HandTracker::Hand> HandTracker::update(const cv::Mat& bgr,
                                                      int maxHands) {
     if (!loaded_ || bgr.empty()) return {};
 
-    // Run palm detection on 128×128
-    cv::Mat blob = nhwcBlob(bgr, 128, 128);
+    // Run palm detection on 192×192
+    cv::Mat blob = nhwcBlob(bgr, 192, 192);
     palmNet_.setInput(blob);
 
     std::vector<cv::Mat> outs;
