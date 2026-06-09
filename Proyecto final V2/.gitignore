@@ -1,0 +1,24 @@
+# Build
+build/
+
+# Compiled binary
+stereo_v2
+
+# Recordings
+*.avi
+*.mp4
+
+# YOLO model (binario pesado, no va en git)
+config/*.onnx
+config/*.weights
+config/*.pt
+config/capturas
+
+# Clangd cache
+.cache/
+compile_commands.json
+
+# Editor
+.vscode/
+*.swp
+*.swo

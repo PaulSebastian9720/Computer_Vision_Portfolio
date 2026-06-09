@@ -1,1 +1,0 @@
-/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/build/intermediates/cxx/Debug/6iz4e944/obj/arm64-v8a

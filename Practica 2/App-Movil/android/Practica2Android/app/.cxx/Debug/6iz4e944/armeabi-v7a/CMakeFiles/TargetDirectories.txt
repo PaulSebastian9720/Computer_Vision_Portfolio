@@ -1,3 +1,0 @@
-/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/6iz4e944/armeabi-v7a/CMakeFiles/practica2.dir
-/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/6iz4e944/armeabi-v7a/CMakeFiles/edit_cache.dir
-/Users/jennyfer/Documents/8 CICLO/VISION POR COMPUTADOR/Prácticas/Practica2/android/Practica2Android/app/.cxx/Debug/6iz4e944/armeabi-v7a/CMakeFiles/rebuild_cache.dir
