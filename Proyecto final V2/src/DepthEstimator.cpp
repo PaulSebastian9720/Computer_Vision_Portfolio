@@ -26,8 +26,8 @@ float DepthEstimator::update(float rawMm) {
     if (!std::isfinite(rawMm) || rawMm <= 0 || rawMm > 8000.0f)
         return xEst_ * scale;
 
-    // Large jump → reset
-    if (xEst_ > 0 && std::fabs(rawMm - xEst_) / xEst_ > 0.35f)
+    // Large jump → reset (umbral amplio para tolerar calibraciones imperfectas)
+    if (xEst_ > 0 && std::fabs(rawMm - xEst_) / xEst_ > 0.80f)
         reset();
 
     // Ring buffer

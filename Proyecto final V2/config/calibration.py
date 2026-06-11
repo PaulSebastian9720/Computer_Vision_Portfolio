@@ -8,8 +8,8 @@ import time
 # ==========================================
 # 1. CONFIGURACIÓN DEL PROYECTO
 # ==========================================
-URL_IZQ = "http://192.168.0.120:81/stream"  
-URL_DER = "http://192.168.0.121:81/stream"  
+URL_IZQ = "http://192.168.0.120/stream"  
+URL_DER = "http://192.168.0.121/stream"  
 
 FILAS = 6          
 COLUMNAS = 9       

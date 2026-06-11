@@ -32,75 +32,207 @@ bool isHandOpen(const HandTracker::Hand& /*h*/, bool /*isRight*/) {
 }
 
 // ─── Sigil ────────────────────────────────────────────────────────────────────
+// Dibujado completamente con manipulación de píxeles:
+// cada forma se calcula por distancia/ángulo por píxel y el blend
+// se hace en un loop explícito de compositing alfa.
 void drawSigil(cv::Mat& frame, cv::Point center, int radius,
                float intensity, float angleDeg) {
-    double t   = nowSec();
+    double t  = nowSec();
     int cx = center.x, cy = center.y;
 
-    float alpha   = 0.22f + intensity * 0.58f;
-    int thickness = (int)(2 + intensity * 4);
-    int bright    = (int)(150 + intensity * 105);
+    float alpha  = 0.22f + intensity * 0.58f;
+    int   bright = (int)(150 + intensity * 105);
+    float ringW  = std::max(2.0f, 2.0f + intensity * 4.0f);
 
-    cv::Scalar base(0, bright, 255);
-    cv::Scalar sec(0, (int)(bright * 0.70), 255);
+    // Capa de efecto vacía — se dibuja con acceso directo a píxeles
+    cv::Mat layer(frame.size(), CV_8UC3, cv::Scalar(0, 0, 0));
 
-    cv::Mat overlay = frame.clone();
-
-    // Concentric circles
-    cv::circle(overlay, center, radius,               base, thickness);
-    cv::circle(overlay, center, (int)(radius * 0.72), sec,  std::max(1, thickness - 1));
-    cv::circle(overlay, center, (int)(radius * 0.35), base, std::max(1, thickness - 1));
-
-    // 12 radial lines
-    for (int i = 0; i < 12; ++i) {
-        double theta = (angleDeg + i * 30.0) * CV_PI / 180.0;
-        cv::Point p1{(int)(cx + std::cos(theta) * radius * 0.38),
-                     (int)(cy + std::sin(theta) * radius * 0.38)};
-        cv::Point p2{(int)(cx + std::cos(theta) * radius * 0.95),
-                     (int)(cy + std::sin(theta) * radius * 0.95)};
-        cv::line(overlay, p1, p2, base, 1);
-    }
-
-    // Triangle
-    std::vector<cv::Point> tri;
+    // Precomputar vértices de triángulo y hexágono
+    float triA = (angleDeg + 90.0f) * (float)(CV_PI / 180.0);
+    float hexA = -angleDeg * 0.8f   * (float)(CV_PI / 180.0);
+    float triV[3][2], hexV[6][2];
     for (int i = 0; i < 3; ++i) {
-        double theta = (angleDeg + 90.0 + i * 120.0) * CV_PI / 180.0;
-        tri.push_back({(int)(cx + std::cos(theta) * radius * 0.62),
-                       (int)(cy + std::sin(theta) * radius * 0.62)});
+        float a = triA + i * (float)(CV_PI * 2.0 / 3.0);
+        triV[i][0] = std::cos(a) * radius * 0.62f;
+        triV[i][1] = std::sin(a) * radius * 0.62f;
     }
-    cv::polylines(overlay, tri, true, sec, thickness);
-
-    // Hexagon
-    std::vector<cv::Point> hex;
     for (int i = 0; i < 6; ++i) {
-        double theta = (-angleDeg * 0.8 + i * 60.0) * CV_PI / 180.0;
-        hex.push_back({(int)(cx + std::cos(theta) * radius * 0.48),
-                       (int)(cy + std::sin(theta) * radius * 0.48)});
+        float a = hexA + i * (float)(CV_PI / 3.0);
+        hexV[i][0] = std::cos(a) * radius * 0.48f;
+        hexV[i][1] = std::sin(a) * radius * 0.48f;
     }
-    cv::polylines(overlay, hex, true, base, 1);
 
-    // Orbital particles
+    // Colores exactos del original (BGR): base=(0,bright,255), sec=(0,bright*0.7,255)
+    // El grosor equivale a thickness/2 a cada lado del radio (igual que cv::circle)
+    float hw      = ringW * 0.5f;   // half-width, igual que thickness/2 en cv::circle
+    float radii[3]= { (float)radius, radius * 0.72f, radius * 0.35f };
+    float glowR   = 6.0f + intensity * 8.0f;
+
+    // Precomputar endpoints de las 12 líneas radiales (igual que el original)
+    float lineP1[12][2], lineP2[12][2];
+    for (int i = 0; i < 12; ++i) {
+        double th = (angleDeg + i * 30.0) * CV_PI / 180.0;
+        lineP1[i][0] = (float)std::cos(th) * radius * 0.38f;
+        lineP1[i][1] = (float)std::sin(th) * radius * 0.38f;
+        lineP2[i][0] = (float)std::cos(th) * radius * 0.95f;
+        lineP2[i][1] = (float)std::sin(th) * radius * 0.95f;
+    }
+
+    // ROI
+    int x0 = std::max(0, cx - radius - 14);
+    int x1 = std::min(frame.cols - 1, cx + radius + 14);
+    int y0 = std::max(0, cy - radius - 14);
+    int y1 = std::min(frame.rows - 1, cy + radius + 14);
+
+    // ── Loop principal de píxeles ────────────────────────────────────────────
+    for (int y = y0; y <= y1; ++y) {
+        cv::Vec3b* row = layer.ptr<cv::Vec3b>(y);
+        for (int x = x0; x <= x1; ++x) {
+            float dx = (float)(x - cx);
+            float dy = (float)(y - cy);
+            float d  = std::sqrt(dx * dx + dy * dy);
+
+            // 1. Círculos concéntricos
+            //    Mismo criterio que cv::circle con thickness: |d - r| <= hw
+            //    Falloff coseno para suavizar bordes como el AA de OpenCV
+            for (int ri = 0; ri < 3; ++ri) {
+                float diff = std::abs(d - radii[ri]);
+                if (diff <= hw + 1.0f) {
+                    float fade = (diff <= hw)
+                        ? 1.0f
+                        : 1.0f - (diff - hw);          // 1px de anti-alias
+                    // base para radio 0 y 2, sec para radio 1
+                    float gv = (ri == 1) ? bright * 0.70f : (float)bright;
+                    row[x][0] = 0;
+                    row[x][1] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][1], gv * fade));
+                    row[x][2] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][2], 255.0f * fade));
+                }
+            }
+
+            // 2. Líneas radiales — distancia de píxel al segmento (igual que cv::line)
+            for (int i = 0; i < 12; ++i) {
+                float ax = lineP1[i][0], ay = lineP1[i][1];
+                float bx = lineP2[i][0], by = lineP2[i][1];
+                float lx = bx - ax, ly = by - ay;
+                float len2 = lx*lx + ly*ly;
+                float tc = (len2 > 0) ? ((dx-ax)*lx + (dy-ay)*ly) / len2 : 0.0f;
+                tc = std::max(0.0f, std::min(1.0f, tc));
+                float ex = ax + tc*lx, ey = ay + tc*ly;
+                float dist = std::sqrt((dx-ex)*(dx-ex) + (dy-ey)*(dy-ey));
+                if (dist < 1.5f) {
+                    float fade = 1.0f - dist / 1.5f;
+                    row[x][0] = 0;
+                    row[x][1] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][1], bright * 0.6f * fade));
+                    row[x][2] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][2], 255.0f * fade));
+                }
+            }
+
+            // 3. Triángulo — distancia de píxel a cada segmento (cv::polylines)
+            for (int i = 0; i < 3; ++i) {
+                int   j  = (i + 1) % 3;
+                float ax = triV[i][0], ay = triV[i][1];
+                float bx = triV[j][0], by = triV[j][1];
+                float lx = bx - ax, ly = by - ay;
+                float len2 = lx*lx + ly*ly;
+                float tc = (len2 > 0) ? ((dx-ax)*lx + (dy-ay)*ly) / len2 : 0.0f;
+                tc = std::max(0.0f, std::min(1.0f, tc));
+                float ex = ax + tc*lx, ey = ay + tc*ly;
+                float dist = std::sqrt((dx-ex)*(dx-ex) + (dy-ey)*(dy-ey));
+                if (dist < hw + 1.0f) {
+                    float fade = (dist <= hw) ? 1.0f : 1.0f - (dist - hw);
+                    row[x][0] = 0;
+                    row[x][1] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][1], bright * 0.70f * fade));
+                    row[x][2] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][2], 255.0f * fade));
+                }
+            }
+
+            // 4. Hexágono — distancia de píxel a cada segmento (cv::polylines, grosor 1)
+            for (int i = 0; i < 6; ++i) {
+                int   j  = (i + 1) % 6;
+                float ax = hexV[i][0], ay = hexV[i][1];
+                float bx = hexV[j][0], by = hexV[j][1];
+                float lx = bx - ax, ly = by - ay;
+                float len2 = lx*lx + ly*ly;
+                float tc = (len2 > 0) ? ((dx-ax)*lx + (dy-ay)*ly) / len2 : 0.0f;
+                tc = std::max(0.0f, std::min(1.0f, tc));
+                float ex = ax + tc*lx, ey = ay + tc*ly;
+                float dist = std::sqrt((dx-ex)*(dx-ex) + (dy-ey)*(dy-ey));
+                if (dist < 1.5f) {
+                    float fade = 1.0f - dist / 1.5f;
+                    row[x][0] = 0;
+                    row[x][1] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][1], (float)bright * fade));
+                    row[x][2] = cv::saturate_cast<uchar>(
+                        std::max((float)row[x][2], 255.0f * fade));
+                }
+            }
+
+            // 5. Glow central — gradiente radial (reemplaza cv::circle relleno)
+            if (d < glowR) {
+                float g = 1.0f - (d / glowR);
+                row[x][0] = cv::saturate_cast<uchar>(row[x][0] + (uchar)(255 * g));
+                row[x][1] = cv::saturate_cast<uchar>(row[x][1] + (uchar)(255 * g));
+                row[x][2] = cv::saturate_cast<uchar>(row[x][2] + (uchar)(255 * g));
+            }
+        }
+    }
+
+    // 6. Partículas orbitales — asignación directa de píxel (valor RGB)
     int nPart = (int)(20 + intensity * 50);
     for (int i = 0; i < nPart; ++i) {
         double theta = (angleDeg * 2.0 + i * 360.0 / nPart) * CV_PI / 180.0;
         double wave  = std::sin(t * 3.0 + i) * 8.0;
-        double dist  = radius + 8.0 + wave;
-        cv::Point p{(int)(cx + std::cos(theta) * dist),
-                    (int)(cy + std::sin(theta) * dist)};
-        cv::circle(overlay, p, 2, base, -1);
+        int    px    = (int)(cx + std::cos(theta) * (radius + 8.0 + wave));
+        int    py    = (int)(cy + std::sin(theta) * (radius + 8.0 + wave));
+        for (int oy = -2; oy <= 2; ++oy) {
+            int ny = py + oy;
+            if (ny < 0 || ny >= layer.rows) continue;
+            cv::Vec3b* row = layer.ptr<cv::Vec3b>(ny);
+            for (int ox = -2; ox <= 2; ++ox) {
+                int nx = px + ox;
+                if (nx >= 0 && nx < layer.cols)
+                    row[nx] = cv::Vec3b(0, (uchar)bright, 255);
+            }
+        }
     }
 
-    // Center glow dot
-    cv::circle(overlay, center, (int)(6 + intensity * 8),
-               cv::Scalar(0, 255, 255), -1);
+    // 7. Compositing alfa píxel a píxel: dst = α·src + (1-α)·dst
+    for (int y = y0; y <= y1; ++y) {
+        const cv::Vec3b* src = layer.ptr<cv::Vec3b>(y);
+        cv::Vec3b*       dst = frame.ptr<cv::Vec3b>(y);
+        for (int x = x0; x <= x1; ++x) {
+            if (src[x][0] == 0 && src[x][1] == 0 && src[x][2] == 0) continue;
+            for (int c = 0; c < 3; ++c)
+                dst[x][c] = cv::saturate_cast<uchar>(
+                    alpha * src[x][c] + (1.0f - alpha) * dst[x][c]);
+        }
+    }
 
-    cv::addWeighted(overlay, alpha, frame, 1.0 - alpha, 0, frame);
-
-    // Outer glow ring
-    cv::Mat glow = frame.clone();
-    cv::circle(glow, center, (int)(radius * 1.08), base, 2);
-    float ga = 0.15f + intensity * 0.20f;
-    cv::addWeighted(glow, ga, frame, 1.0 - ga, 0, frame);
+    // 8. Anillo de glow exterior — gradiente radial sobre el frame
+    float outerR = radius * 1.08f, outerW = radius * 0.12f;
+    float gaMax  = 0.15f + intensity * 0.20f;
+    int   gr0 = std::max(0, cy - (int)(radius * 1.22f));
+    int   gr1 = std::min(frame.rows - 1, cy + (int)(radius * 1.22f));
+    int   gc0 = std::max(0, cx - (int)(radius * 1.22f));
+    int   gc1 = std::min(frame.cols - 1, cx + (int)(radius * 1.22f));
+    for (int y = gr0; y <= gr1; ++y) {
+        cv::Vec3b* dst = frame.ptr<cv::Vec3b>(y);
+        for (int x = gc0; x <= gc1; ++x) {
+            float d    = std::sqrt((float)((x-cx)*(x-cx) + (y-cy)*(y-cy)));
+            float diff = std::abs(d - outerR);
+            if (diff < outerW) {
+                float ga = gaMax * (1.0f - diff / outerW);
+                dst[x][1] = cv::saturate_cast<uchar>(dst[x][1] + (uchar)(bright * ga));
+                dst[x][2] = cv::saturate_cast<uchar>(dst[x][2] + (uchar)(255  * ga));
+            }
+        }
+    }
 }
 
 // ─── Portal ───────────────────────────────────────────────────────────────────
@@ -245,18 +377,6 @@ float render(cv::Mat& frame,
         cv::line(frame, m1.center, m2.center, cv::Scalar(0, 200, 255), 2);
 
         drawPortal(frame, portalCenter, portalR, portalI, -angleDeg);
-    }
-
-    // Z info text
-    if (zCm > 1.0f) {
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "Z=%.0f cm", zCm);
-        cv::putText(frame, buf, {10, frame.rows - 12},
-                    cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                    cv::Scalar(0, 0, 0), 3);
-        cv::putText(frame, buf, {10, frame.rows - 12},
-                    cv::FONT_HERSHEY_SIMPLEX, 0.6,
-                    cv::Scalar(0, 255, 0), 1);
     }
 
     // Advance angle: faster when closer (higher intensity)
