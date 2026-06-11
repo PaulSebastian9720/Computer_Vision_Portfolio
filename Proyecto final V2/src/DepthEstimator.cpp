@@ -18,16 +18,22 @@ float DepthEstimator::ringMedian() {
     std::array<float, RING> tmp;
     std::copy_n(ring_.begin(), count_, tmp.begin());
     std::sort(tmp.begin(), tmp.begin() + count_);
-    int mid = count_ / 2;
-    return (count_ % 2 == 0) ? 0.5f * (tmp[mid - 1] + tmp[mid]) : tmp[mid];
+    // Media del rango intercuartílico (Q1..Q3) — rechaza outliers sin bloquear movimiento
+    int q1 = count_ / 4;
+    int q3 = count_ * 3 / 4;
+    float sum = 0.0f;
+    for (int i = q1; i <= q3; ++i) sum += tmp[i];
+    return sum / (q3 - q1 + 1);
 }
 
 float DepthEstimator::update(float rawMm) {
-    if (!std::isfinite(rawMm) || rawMm <= 0 || rawMm > 8000.0f)
+    // Rechazar medidas fuera del rango útil (0–350 cm)
+    if (!std::isfinite(rawMm) || rawMm <= 0 || rawMm > 3500.0f)
         return xEst_ * scale;
 
-    // Large jump → reset (umbral amplio para tolerar calibraciones imperfectas)
-    if (xEst_ > 0 && std::fabs(rawMm - xEst_) / xEst_ > 0.80f)
+    // Reset duro solo si la divergencia es extrema (> 200 cm)
+    // — sin gate multiplicativo para no bloquear movimientos rápidos
+    if (xEst_ > 0 && std::fabs(rawMm - xEst_) > 2000.0f)
         reset();
 
     // Ring buffer

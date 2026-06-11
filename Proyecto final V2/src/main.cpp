@@ -106,12 +106,13 @@ static cv::Mat makeDisparityHeatmap(const cv::Mat &disp16, int numDisp) {
 static float depthAtCenter(const cv::Mat &disp16, double focal,
                            double baseline) {
   int cx = disp16.cols / 2, cy = disp16.rows / 2;
-  int patch = 10;
+  int patch = 22;  // parche 44x44 — más píxeles, mediana más robusta
   cv::Rect roi(cx - patch, cy - patch, patch * 2, patch * 2);
   roi &= cv::Rect(0, 0, disp16.cols, disp16.rows);
   cv::Mat region = disp16(roi);
 
   std::vector<float> vals;
+  vals.reserve(roi.width * roi.height);
   for (int r = 0; r < region.rows; ++r) {
     const int16_t *row = region.ptr<int16_t>(r);
     for (int c = 0; c < region.cols; ++c) {
@@ -120,10 +121,17 @@ static float depthAtCenter(const cv::Mat &disp16, double focal,
         vals.push_back(d);
     }
   }
-  if (vals.empty())
+  if (vals.size() < 8)   // muy pocos píxeles válidos → no medir
     return 0.0f;
+
   std::sort(vals.begin(), vals.end());
-  float med = vals[vals.size() / 2];
+
+  // Usar el rango intercuartílico (Q1..Q3) para eliminar outliers
+  // antes de calcular la mediana final
+  size_t q1 = vals.size() / 4;
+  size_t q3 = vals.size() * 3 / 4;
+  float med = vals[(q1 + q3) / 2];   // mediana del rango IQR
+
   return static_cast<float>(focal * baseline / med);
 }
 

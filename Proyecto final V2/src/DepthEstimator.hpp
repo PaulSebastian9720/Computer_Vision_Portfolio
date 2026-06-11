@@ -6,7 +6,7 @@
 // 1-D Kalman filter + ring-buffer moving average for depth stabilization
 class DepthEstimator {
 public:
-    static constexpr int RING = 16;
+    static constexpr int RING = 24;
 
     explicit DepthEstimator(float processNoise = 10.0f,
                              float measureNoise = 300.0f);

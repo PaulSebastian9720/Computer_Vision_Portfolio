@@ -10,15 +10,15 @@
  * La IP la asigna el router — se imprime por Serial al arrancar.
  * Stream:   http://<IP>/stream
  * Snapshot: http://<IP>/capture
- * Info:     http://<IP>/status
  */
 
 #include "esp_camera.h"
 #include "esp_http_server.h"
+#include "esp_wifi.h"
 #include <WiFi.h>
 
-const char *SSID = "Red122"; // <-- CAMBIA AQUÍ
-const char *PASSWORD = "PaulSebastian";
+const char *SSID = "Telecable-Fibra Naspud Vivar";
+const char *PASSWORD = "#.TEFY9728.";
 
 // Pinout AI-Thinker ESP32-CAM
 #define PWDN_GPIO_NUM 32
@@ -100,17 +100,6 @@ static esp_err_t capture_handler(httpd_req_t *req) {
   return res;
 }
 
-// ─── Status handler ───────────────────────────────────
-static esp_err_t status_handler(httpd_req_t *req) {
-  char buf[128];
-  snprintf(buf, sizeof(buf), "{\"ip\":\"%s\",\"rssi\":%d,\"heap\":%lu}",
-           WiFi.localIP().toString().c_str(), WiFi.RSSI(),
-           (unsigned long)ESP.getFreeHeap());
-  httpd_resp_set_type(req, "application/json");
-  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-  return httpd_resp_send(req, buf, strlen(buf));
-}
-
 // ─── Servidor HTTP ────────────────────────────────────
 static httpd_handle_t camera_httpd = nullptr;
 
@@ -118,6 +107,7 @@ void startServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
   config.max_uri_handlers = 8;
+  config.lru_purge_enable = true; // libera conexiones inactivas rápido
 
   httpd_uri_t stream_uri = {.uri = "/stream",
                             .method = HTTP_GET,
@@ -127,22 +117,21 @@ void startServer() {
                              .method = HTTP_GET,
                              .handler = capture_handler,
                              .user_ctx = nullptr};
-  httpd_uri_t status_uri = {.uri = "/status",
-                            .method = HTTP_GET,
-                            .handler = status_handler,
-                            .user_ctx = nullptr};
 
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &stream_uri);
     httpd_register_uri_handler(camera_httpd, &capture_uri);
-    httpd_register_uri_handler(camera_httpd, &status_uri);
   }
 }
 
 // ─── setup() ─────────────────────────────────────────
 void setup() {
+  // CPU a máxima velocidad (240 MHz) — primera línea, antes de todo
+  setCpuFrequencyMhz(240);
+
   Serial.begin(115200);
   Serial.println("\n[BOOT] ESP32-CAM stream");
+  Serial.printf("[CPU] %d MHz\n", getCpuFrequencyMhz());
 
   // Inicializar cámara
   camera_config_t config;
@@ -167,7 +156,8 @@ void setup() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = FRAMESIZE_QVGA; // 320x240
-  config.jpeg_quality = 12;
+  config.jpeg_quality =
+      20; // 20 en vez de 12: archivos ~30% más pequeños, más fps
   config.fb_count = 2;
   config.fb_location = CAMERA_FB_IN_PSRAM;
 
@@ -189,7 +179,8 @@ void setup() {
   s->set_dcw(s, 1);
   Serial.println("[CAM] OK");
 
-  // Conectar WiFi (DHCP — el router asigna la IP)
+  // WiFi: deshabilitar sleep ANTES de conectar (principal causa de lentitud)
+  WiFi.setSleep(false);
   WiFi.begin(SSID, PASSWORD);
   Serial.printf("[WiFi] Conectando a '%s'", SSID);
 
@@ -206,16 +197,16 @@ void setup() {
     ESP.restart();
   }
 
+  // Deshabilitar power save del stack WiFi (reduce latencia ~50ms → <5ms)
+  esp_wifi_set_ps(WIFI_PS_NONE);
+
   startServer();
 
-  // ── Imprimir IP asignada ──────────────────────────
   Serial.println();
   Serial.println("=====================================");
-  Serial.printf("  IP:       %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("  RSSI:     %d dBm\n", WiFi.RSSI());
-  Serial.printf("  Stream:   http://%s/stream\n",
-                WiFi.localIP().toString().c_str());
-  Serial.printf("  Snapshot: http://%s/capture\n",
+  Serial.printf("  IP:     %s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("  RSSI:   %d dBm\n", WiFi.RSSI());
+  Serial.printf("  Stream: http://%s/stream\n",
                 WiFi.localIP().toString().c_str());
   Serial.println("=====================================");
 }
@@ -235,6 +226,7 @@ void loop() {
       Serial.println("\n[WiFi] Sin red — reiniciando");
       ESP.restart();
     }
+    esp_wifi_set_ps(WIFI_PS_NONE);
     Serial.printf("\n[WiFi] Reconectado: %s\n",
                   WiFi.localIP().toString().c_str());
   }
