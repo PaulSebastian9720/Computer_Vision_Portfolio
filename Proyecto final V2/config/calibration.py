@@ -8,12 +8,12 @@ import time
 # ==========================================
 # 1. CONFIGURACIÓN
 # ==========================================
-URL_IZQ = "http://10.194.62.47/stream"
-URL_DER = "http://10.194.62.63/stream"   
+URL_IZQ = "http://192.168.0.120/stream"
+URL_DER = "http://192.168.0.121/stream"   
 
 FILAS           = 6
 COLUMNAS        = 9
-TAMANO_CUADRADO = 25.0   # mm
+TAMANO_CUADRADO = 25.0   # mm   
 MIN_PARES       = 15 
 
 # Rutas relativas al directorio de este script (funciona desde cualquier CWD)
