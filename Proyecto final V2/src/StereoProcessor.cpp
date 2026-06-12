@@ -9,7 +9,7 @@ static void destripe(cv::Mat& g) {
         double s = 0;
         for (int c = 0; c < g.cols; ++c) s += row[c];
         double rm = s / g.cols;
-        if (rm < 1.0) continue;
+        if (rm < 5.0) continue;
         double k = std::max(0.70, std::min(1.43, gm / rm));
         for (int c = 0; c < g.cols; ++c)
             row[c] = cv::saturate_cast<uchar>(row[c] * k);
@@ -61,12 +61,12 @@ void StereoProcessor::rebuildMatcher(const StereoParams& p) {
     const int P2 = 32 * 3 * bs * bs;
 
     sgbm_ = cv::StereoSGBM::create(0, nd, bs, P1, P2,
-                                    2, 30, 8, 150, 2,
+                                    5, 30, 12, 200, 2,
                                     cv::StereoSGBM::MODE_SGBM);
     rightMatcher_ = cv::ximgproc::createRightMatcher(sgbm_);
     wls_ = cv::ximgproc::createDisparityWLSFilter(sgbm_);
-    wls_->setLambda(12000.0);
-    wls_->setSigmaColor(1.5);
+    wls_->setLambda(18000.0);
+    wls_->setSigmaColor(2.0);
 
     built_ = p;
     built_.numDisp   = nd;
@@ -93,8 +93,10 @@ cv::Mat StereoProcessor::computeDisparity(const cv::Mat& lg, const cv::Mat& rg,
 
     destripe(l);
     destripe(r);
-    cv::GaussianBlur(l, l, {1, 3}, 0, 0.8);
-    cv::GaussianBlur(r, r, {1, 3}, 0, 0.8);
+    // Blur horizontal (5×1): atenúa rayas horizontales del OV2640
+    // sin borrar los bordes verticales que SGBM necesita para matching
+    cv::GaussianBlur(l, l, {5, 1}, 1.2);
+    cv::GaussianBlur(r, r, {5, 1}, 1.2);
 
     cv::Mat dL, dR;
     sgbm_->compute(l, r, dL);

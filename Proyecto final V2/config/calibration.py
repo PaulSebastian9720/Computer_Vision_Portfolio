@@ -8,13 +8,13 @@ import time
 # ==========================================
 # 1. CONFIGURACIÓN
 # ==========================================
-URL_IZQ = "http://192.168.0.120/stream"   # puerto 80 (sin :81)
-URL_DER = "http://192.168.0.121/stream"   # puerto 80 (sin :81)
+URL_IZQ = "http://10.194.62.47/stream"
+URL_DER = "http://10.194.62.63/stream"   
 
 FILAS           = 6
 COLUMNAS        = 9
-TAMANO_CUADRADO = 26.0   # mm
-MIN_PARES       = 15     # mínimo recomendado para buena calibración
+TAMANO_CUADRADO = 25.0   # mm
+MIN_PARES       = 15 
 
 # Rutas relativas al directorio de este script (funciona desde cualquier CWD)
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -214,9 +214,12 @@ rmse_l, K_l, dist_l, _, _ = cv2.calibrateCamera(pares_buenos_obj, pares_buenos_l
 rmse_r, K_r, dist_r, _, _ = cv2.calibrateCamera(pares_buenos_obj, pares_buenos_r, img_shape, None, None, flags=flags_indiv, criteria=criteria_calib)
 print(f"  RMSE limpio → izq: {rmse_l:.4f} px | der: {rmse_r:.4f} px")
 
-# ── PASO 3: Calibración estéreo congelando las intrínsecas ──
-print("  Ejecutando stereoCalibrate con intrínsecas fijas...")
-flags_stereo = cv2.CALIB_FIX_INTRINSIC
+# ── PASO 3: Calibración estéreo refinando ligeramente las intrínsecas ──
+print("  Ejecutando stereoCalibrate con intrínsecas como guess inicial...")
+# CALIB_USE_INTRINSIC_GUESS: usa las K calculadas arriba como punto de partida
+# y las refina levemente junto con R y T. Evita que errores en K se absorban en T
+# (bug de FIX_INTRINSIC: baseline resultaba ~40mm en vez de 80mm).
+flags_stereo = cv2.CALIB_USE_INTRINSIC_GUESS + cv2.CALIB_FIX_K3 + cv2.CALIB_FIX_K4 + cv2.CALIB_FIX_K5
 criteria_stereo = (cv2.TERM_CRITERIA_MAX_ITER + cv2.TERM_CRITERIA_EPS, 300, 1e-6)
 
 rmse_stereo, K_l, dist_l, K_r, dist_r, R, T, E, F = cv2.stereoCalibrate(
@@ -254,7 +257,8 @@ print(f"\n  Guardado exitoso en: {YAML_SALIDA}")
 T_flat   = T.flatten()
 baseline = np.linalg.norm(T_flat)
 angulo   = np.degrees(np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1)))
-err_base = (baseline - 80.0) / 80.0 * 100
+BASELINE_FISICO_MM = 81.0 
+err_base = (baseline - BASELINE_FISICO_MM) / BASELINE_FISICO_MM * 100
 diff_foc = abs(K_l[0, 0] - K_r[0, 0]) / K_l[0, 0] * 100
 
 print("\n╔══════════════════════════════════════════════╗")

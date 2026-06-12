@@ -9,7 +9,7 @@ public:
     static constexpr int RING = 24;
 
     explicit DepthEstimator(float processNoise = 10.0f,
-                             float measureNoise = 300.0f);
+                             float measureNoise = 500.0f);
 
     // Feed a new raw measurement (mm). Returns filtered estimate (mm).
     float update(float rawMm);

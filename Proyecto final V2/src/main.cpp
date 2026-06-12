@@ -13,8 +13,8 @@
 #include <string>
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-static constexpr char CAM_LEFT[] = "http://192.168.0.120/stream";
-static constexpr char CAM_RIGHT[] = "http://192.168.0.121/stream";
+static constexpr char CAM_LEFT[] = "http://10.194.62.47/stream";
+static constexpr char CAM_RIGHT[] = "http://10.194.62.63/stream";
 static constexpr char CALIB_YAML[] = "config/stereo_calib.yml";
 static constexpr char YOLO_MODEL[] = "config/yolov8n.onnx";
 static constexpr char YOLO_NAMES[] = "config/coco.names";

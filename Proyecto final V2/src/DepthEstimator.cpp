@@ -44,6 +44,10 @@ float DepthEstimator::update(float rawMm) {
 
     float med = ringMedian();
 
+    // Dead-zone: con buffer lleno, ignorar fluctuaciones < 25mm (escena estática)
+    if (count_ == RING && std::fabs(med - xEst_) < 25.0f)
+        return xEst_ * scale;
+
     // Kalman predict
     pEst_ += q_;
 

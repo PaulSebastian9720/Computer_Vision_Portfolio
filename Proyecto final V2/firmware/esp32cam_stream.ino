@@ -153,7 +153,7 @@ void setup() {
   config.pin_sscb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
+  config.xclk_freq_hz = 16000000;  // 16MHz reduce ruido HF del oscilador (era 20MHz)
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = FRAMESIZE_QVGA; // 320x240
   config.jpeg_quality =
@@ -173,10 +173,17 @@ void setup() {
   s->set_awb_gain(s, 1);
   s->set_wb_mode(s, 0);
   s->set_exposure_ctrl(s, 1);
+  s->set_aec2(s, 1);       // AEC2: algoritmo de exposición mejorado
+  s->set_ae_level(s, 0);   // nivel AE neutro
   s->set_gain_ctrl(s, 1);
   s->set_raw_gma(s, 1);
   s->set_lenc(s, 1);
   s->set_dcw(s, 1);
+  // Anti-flicker 60Hz: activar banding filter del OV2640 via registro directo
+  // COM8 (0x13) bit5 = banding filter ON; banco de sensor (0xFF=0x01)
+  s->set_reg(s, 0xFF, 0xFF, 0x01);  // seleccionar banco sensor
+  s->set_reg(s, 0x13, 0x20, 0x20);  // COM8 bit5 = banding filter ON
+  s->set_reg(s, 0xFF, 0xFF, 0x00);  // volver a banco DSP
   Serial.println("[CAM] OK");
 
   // WiFi: deshabilitar sleep ANTES de conectar (principal causa de lentitud)
