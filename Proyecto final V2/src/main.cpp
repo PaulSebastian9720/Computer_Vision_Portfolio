@@ -13,8 +13,8 @@
 #include <string>
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-static constexpr char CAM_LEFT[] = "http://10.194.62.47/stream";
-static constexpr char CAM_RIGHT[] = "http://10.194.62.63/stream";
+static constexpr char CAM_LEFT[] = "http://192.168.0.120/stream";
+static constexpr char CAM_RIGHT[] = "http://192.168.0.121/stream";
 static constexpr char CALIB_YAML[] = "config/stereo_calib.yml";
 static constexpr char YOLO_MODEL[] = "config/yolov8n.onnx";
 static constexpr char YOLO_NAMES[] = "config/coco.names";
@@ -29,7 +29,7 @@ static constexpr int DISP_H = 480;
 struct Controls {
   int brightness = 100; // 0–200, 100 = no change
   int contrast = 10;    // ×0.1 → 1.0
-  int claheOn = 1;
+  int claheOn = 0;
   int minArea = 5;    // ×100 px²
   int numDispIdx = 1; // 0=64, 1=128, 2=256
   int blockSize = 9;  // 3–21 odd
@@ -40,7 +40,7 @@ struct Controls {
 static Controls g_ctrl;
 
 static int numDispFromIdx(int idx) {
-  const int vals[] = {64, 128, 256};
+  const int vals[] = {96, 128, 160};
   return vals[std::max(0, std::min(idx, 2))];
 }
 
@@ -106,7 +106,7 @@ static cv::Mat makeDisparityHeatmap(const cv::Mat &disp16, int numDisp) {
 static float depthAtCenter(const cv::Mat &disp16, double focal,
                            double baseline) {
   int cx = disp16.cols / 2, cy = disp16.rows / 2;
-  int patch = 22;  // parche 44x44 — más píxeles, mediana más robusta
+  int patch = 22; // parche 44x44 — más píxeles, mediana más robusta
   cv::Rect roi(cx - patch, cy - patch, patch * 2, patch * 2);
   roi &= cv::Rect(0, 0, disp16.cols, disp16.rows);
   cv::Mat region = disp16(roi);
@@ -121,7 +121,7 @@ static float depthAtCenter(const cv::Mat &disp16, double focal,
         vals.push_back(d);
     }
   }
-  if (vals.size() < 8)   // muy pocos píxeles válidos → no medir
+  if (vals.size() < 8) // muy pocos píxeles válidos → no medir
     return 0.0f;
 
   std::sort(vals.begin(), vals.end());
@@ -130,7 +130,7 @@ static float depthAtCenter(const cv::Mat &disp16, double focal,
   // antes de calcular la mediana final
   size_t q1 = vals.size() / 4;
   size_t q3 = vals.size() * 3 / 4;
-  float med = vals[(q1 + q3) / 2];   // mediana del rango IQR
+  float med = vals[(q1 + q3) / 2]; // mediana del rango IQR
 
   return static_cast<float>(focal * baseline / med);
 }
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
   cv::createTrackbar("Brillo (0-200)", winCtrl, &g_ctrl.brightness, 200);
   cv::createTrackbar("Contraste (x0.1)", winCtrl, &g_ctrl.contrast, 30);
   cv::createTrackbar("CLAHE ON/OFF", winCtrl, &g_ctrl.claheOn, 1);
-  cv::createTrackbar("numDisp 0=64 1=128", winCtrl, &g_ctrl.numDispIdx, 2);
+  cv::createTrackbar("numDisp 0=96 1=128", winCtrl, &g_ctrl.numDispIdx, 2);
   cv::createTrackbar("BlockSize (impar)", winCtrl, &g_ctrl.blockSize, 21);
 
   // ── Ventana principal ─────────────────────────────────────────────────────

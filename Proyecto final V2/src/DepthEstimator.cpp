@@ -28,7 +28,7 @@ float DepthEstimator::ringMedian() {
 
 float DepthEstimator::update(float rawMm) {
     // Rechazar medidas fuera del rango útil (0–350 cm)
-    if (!std::isfinite(rawMm) || rawMm <= 0 || rawMm > 3500.0f)
+    if (!std::isfinite(rawMm) || rawMm < 250.0f || rawMm > 1400.0f)
         return xEst_ * scale;
 
     // Reset duro solo si la divergencia es extrema (> 200 cm)
