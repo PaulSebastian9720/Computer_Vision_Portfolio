@@ -1,0 +1,30 @@
+# ── Dataset completo ───────────────────────────────────────────────────────────
+# Las imágenes propias van en clases_24_30/ (sí se sube)
+Leaves/
+
+# ── Archivos descargados ───────────────────────────────────────────────────────
+*.zip
+*.rar
+*.tar.gz
+*.7z
+*.pdf
+
+informe/
+informe_visualizaciones/
+
+# ── Android / Gradle ──────────────────────────────────────────────────────────
+build/
+.gradle/
+*.iml
+local.properties
+.cxx/
+
+# OpenCV — SDK, builds y cualquier carpeta de instalación
+**/OpenCV-sdk/
+**/OpenCV-android-sdk/
+**/opencv/
+**/opencv-build/
+
+# APKs
+*.apk
+*.aab
