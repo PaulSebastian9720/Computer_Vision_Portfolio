@@ -8,3 +8,6 @@ parte1A/eval_yolo/
 # Archivos ajenos a la practica que quedaron guardados por error en artifacts/video/
 artifacts/video/plantilla_ventas*.csv
 artifacts/video/reporte_*.pdf
+
+# Informe LaTeX (se compila localmente / en Overleaf, no se versiona)
+informe_p4_VC/
