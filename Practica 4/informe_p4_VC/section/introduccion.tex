@@ -1,0 +1,53 @@
+% ============================================================
+\section{Introducción}
+% ============================================================
+
+Las cargas de trabajo de visión por computador presentan una dicotomía
+arquitectónica fundamental entre los dos procesadores disponibles en un equipo
+moderno. La CPU es un procesador orientado a \emph{latencia}: pocos núcleos de
+propósito general con frecuencias altas, jerarquías de caché profundas y lógica
+compleja de predicción de saltos y ejecución fuera de orden, optimizados para
+minimizar el tiempo de una tarea secuencial. La GPU, en cambio, es un procesador
+orientado a \emph{throughput}: miles de núcleos simples agrupados en
+multiprocesadores de flujo (SM) que ejecutan el mismo programa sobre miles de
+datos simultáneamente bajo el modelo SIMT (\emph{Single Instruction, Multiple
+Threads}) \cite{Owens2008}. La plataforma CUDA expone este paralelismo mediante
+\emph{kernels} que se lanzan sobre mallas de bloques de hilos, con una memoria
+de video dedicada (VRAM) de gran ancho de banda \cite{NVIDIA_CUDA}.
+
+Esta ventaja no es gratuita: la GPU posee su propio espacio de memoria, por lo
+que todo dato debe transferirse desde la RAM del sistema a la VRAM a través del
+bus PCIe antes de ser procesado, y el resultado debe regresar por la misma vía.
+Esta \emph{latencia de transferencia} es el costo fijo que decide si la
+aceleración es rentable: en operaciones aritméticamente ligeras el viaje de ida
+y vuelta puede consumir más tiempo que el propio cómputo, mientras que en redes
+neuronales profundas ---donde las convoluciones se reducen a multiplicaciones
+matriciales masivamente paralelas--- el cómputo domina y la GPU obtiene
+aceleraciones de un orden de magnitud \cite{Paszke2019}. El consumo de VRAM,
+además, limita el tamaño de lote y de modelo que la GPU puede alojar, del mismo
+modo que la RAM limita a la CPU.
+
+El presente informe cuantifica esta disyuntiva mediante un benchmark de tres
+casos representativos de la práctica profesional en visión por computador:
+\textbf{(A)} el ajuste fino (\emph{fine-tuning}) de la red de segmentación
+YOLO26n sobre un conjunto de datos propio, comparando entrenamiento e
+inferencia en CPU y GPU; \textbf{(B)} la inferencia en video con dos
+generaciones de la familia YOLO (YOLOv12n y YOLO26n) y con la red de
+superresolución Real-ESRGAN \cite{Wang2021}, midiendo cuadros por segundo (FPS)
+y consumo de recursos en ambos dispositivos; y \textbf{(C)} un pipeline nativo
+de detección de bordes en C++ con OpenCV, implementado en dos programas
+equivalentes que ejecutan las mismas operaciones sobre \texttt{cv::Mat} (CPU) y
+sobre \texttt{cv::cuda::GpuMat} (GPU) \cite{OpenCV_CUDA}.
+
+\subsection*{Objetivos}
+\begin{itemize}
+  \item Comparar cuantitativamente el rendimiento de CPU y GPU en
+        entrenamiento de redes profundas, inferencia de detección/segmentación
+        y procesamiento clásico de imágenes.
+  \item Registrar el estado del hardware durante cada prueba
+        (\texttt{nvidia-smi}, \texttt{btop}, \texttt{top}, \texttt{lscpu}),
+        incluyendo uso de CPU, RAM, VRAM, potencia y temperatura.
+  \item Calcular la aceleración (\emph{speedup}) GPU/CPU de cada caso y
+        justificar técnicamente por qué difiere entre ellos.
+  \item Emitir recomendaciones de uso de hardware según el tipo de carga.
+\end{itemize}

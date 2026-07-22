@@ -1,0 +1,42 @@
+% ============================================================
+\appendix
+\section{Anexos}
+% ============================================================
+
+\subsection{Repositorio y Material Complementario}
+
+Los videos de demostración de las tres partes de la práctica se encuentran
+disponibles en la siguiente carpeta de Google Drive:
+
+\begin{center}
+  \url{https://drive.google.com/drive/folders/1QBBWjK9oUn1fayTIRIUvuzareJY8L_fN?usp=sharing}
+\end{center}
+
+El código fuente completo (cuadernos de Colab, scripts de la Parte 1B y
+proyecto C++ de la Parte 1C) se encuentra disponible en:
+
+\begin{center}
+  % TODO: reemplazar cuando se suba el repositorio
+  \texttt{[ENLACE AL REPOSITORIO -- pendiente]}
+\end{center}
+
+\subsection{Estructura del Proyecto}
+
+\begin{lstlisting}[style=code]
+Practica 4/
+|-- parte1A/                 # Caso A: fine-tuning YOLO26n-seg
+|   |-- 01_Practica4_YOLO26_Segmentacion.ipynb
+|   |-- 02_Practica4_Inferencia_Local.ipynb
+|   |-- 03_Practica4_Benchmark_Hardware_Colab.ipynb
+|   `-- save/                # metricas, capturas y demos generadas
+|-- parte1B/                 # Caso B: inferencia YOLO y Real-ESRGAN
+|   |-- run_yolo.py
+|   |-- run_superres.py
+|   `-- modelos/             # yolo12n.pt, yolo26n.pt, RealESRGAN_x4plus.pth
+`-- parte1C/                 # Caso C: pipeline C++ OpenCV/CUDA
+    |-- CMakeLists.txt
+    |-- Makefile
+    `-- src/
+        |-- pipeline_cpu.cpp
+        `-- pipeline_gpu.cpp
+\end{lstlisting}

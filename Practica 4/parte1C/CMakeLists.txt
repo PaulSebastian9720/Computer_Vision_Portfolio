@@ -5,12 +5,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "")
 
-# Por defecto, el mismo OpenCV local que "Proyecto final V2" (sin CUDA) — asi
-# preprocesamiento_cpu ya compila y corre en este equipo. En el laboratorio de Computo 8,
-# sobreescribir OpenCV_DIR para que apunte al OpenCV compilado CON CUDA (WITH_CUDA=ON +
-# opencv_contrib); ahi tambien se habilita preprocesamiento_gpu.
-set(OpenCV_DIR "/home/paul/Aplicaciones/opencv/install/lib/cmake/opencv4"
-    CACHE PATH "OpenCV cmake config directory")
+# En el laboratorio de Computo 8 el OpenCV con CUDA (WITH_CUDA=ON + opencv_contrib) esta
+# instalado a nivel de sistema, por lo que find_package lo encuentra sin fijar OpenCV_DIR.
+# En este equipo (sin esa instalacion) se usa la build local sin CUDA de "Proyecto final V2",
+# solo si existe; -DOpenCV_DIR=... en la linea de cmake sigue teniendo prioridad.
+if(NOT DEFINED OpenCV_DIR AND EXISTS "/home/paul/Aplicaciones/opencv/install/lib/cmake/opencv4")
+    set(OpenCV_DIR "/home/paul/Aplicaciones/opencv/install/lib/cmake/opencv4"
+        CACHE PATH "OpenCV cmake config directory")
+endif()
 
 find_package(OpenCV REQUIRED)
 message(STATUS "OpenCV ${OpenCV_VERSION} (CUDA: ${OpenCV_CUDA_VERSION}) — ${OpenCV_LIBS}")

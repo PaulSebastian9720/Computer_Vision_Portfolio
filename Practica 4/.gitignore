@@ -1,0 +1,10 @@
+Tools segmentation.coco-segmentation
+Guia-Practicas-UNIDAD-4.1.2.pdf
+Tools segmentation.coco-segmentation.zip
+
+# Dataset de evaluacion local (exportado de Roboflow, se regenera desde el link del informe)
+parte1A/eval_yolo/
+
+# Archivos ajenos a la practica que quedaron guardados por error en artifacts/video/
+artifacts/video/plantilla_ventas*.csv
+artifacts/video/reporte_*.pdf

@@ -1,0 +1,83 @@
+% ============================================================
+%  Informe Técnico – Práctica 4: Clasificación de Objetos con Deep Learning
+%  (fine tuning YOLO v26, detección y super resolución en GPU)
+%  Visión por Computador – Universidad Politécnica Salesiana
+%  Autores: Naspud Vivar Paul S. · Ramírez Saeteros Jennyfer C.
+%  Período:  Marzo – Agosto 2026
+% ============================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks,colorlinks=true,
+            linkcolor=blue!55!black,
+            citecolor=green!45!black,
+            urlcolor=blue!65!black]{hyperref}
+
+%% ── Listings ────────────────────────────────────────────────
+\definecolor{bg}{rgb}{0.97,0.97,0.97}
+\definecolor{kw}{rgb}{0.13,0.29,0.53}
+\definecolor{cm}{rgb}{0.0,0.50,0.0}
+\definecolor{st}{rgb}{0.58,0.0,0.82}
+\definecolor{ln}{rgb}{0.5,0.5,0.5}
+
+\lstdefinestyle{code}{
+  backgroundcolor=\color{bg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cm}\itshape,
+  stringstyle=\color{st},
+  numbers=none,
+  breaklines=true,
+  frame=none,
+  xleftmargin=1em,
+  showstringspaces=false,
+  tabsize=2,
+}
+
+%% ── Línea decorativa para portada ──────────────────────────
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+%% ── Encabezado/pie ──────────────────────────────────────────
+\pagestyle{fancy}\fancyhf{}
+\lhead{\small Visión por Computador -- UPS -- G9}
+\rhead{\small Naspud \& Ramírez -- 2026}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+%% ── PORTADA ─────────────────────────────────────────────────
+\input{title/caratula}
+
+%% ── ÍNDICES ─────────────────────────────────────────────────
+\tableofcontents
+\listoffigures
+\listoftables
+\newpage
+
+%% ── SECCIONES ───────────────────────────────────────────────
+\input{section/introduccion}
+\input{section/desarrollo}
+\input{section/implementacion}
+\input{section/resultados}
+\input{section/conclusiones}
+\input{section/referencias}
+\input{section/anexos}
+
+\end{document}

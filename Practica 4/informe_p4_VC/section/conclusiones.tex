@@ -1,0 +1,35 @@
+% ============================================================
+\section{Conclusiones}
+% ============================================================
+
+La evidencia recogida en los tres benchmarks permite concluir lo siguiente:
+
+\begin{enumerate}
+  \item La GPU aceleró todas las cargas evaluadas, pero con magnitudes muy
+        distintas según la naturaleza del cómputo: 2.4--2.7$\times$ en el
+        entrenamiento de YOLO26n-seg (limitado por la T4 y el pipeline de
+        datos de 2 vCPU), 3.2--4.4$\times$ en inferencia profunda sobre video
+        (YOLO y Real-ESRGAN en la RTX 3070) y 2.9$\times$ en el pipeline
+        clásico de bordes en C++. El factor determinante es la razón entre
+        cómputo paralelizable y latencia de transferencia CPU$\leftrightarrow$VRAM.
+  \item El fine-tuning convergió correctamente: la pérdida de clasificación
+        cayó de 4.503 a 0.401 entre las épocas 1 y 60 y el mAP50 de cajas
+        subió de 0.192 a 0.792, con un consumo estable de VRAM de
+        3.31--4.6\,GiB, muy por debajo de los 15\,GiB de la T4.
+  \item En inferencia GPU ambas variantes YOLO convergieron a
+        $\approx$122--125 FPS pese a rendir distinto en CPU (29.3 vs.\ 38.9
+        FPS), lo que demuestra que, una vez acelerada la red, el cuello de
+        botella se traslada a las etapas secuenciales del bucle (decodificación
+        y visualización), en concordancia con la ley de Amdahl.
+  \item El costo sistémico de forzar cargas profundas en CPU es severo:
+        Real-ESRGAN llevó al i9-12900K a 91\,$^{\circ}$C con 52\,\% de uso
+        agregado para entregar 0.36 FPS, mientras la GPU resolvió la misma
+        carga a 1.57 FPS con la CPU al 5\,\%. La GPU no solo es más rápida:
+        libera al resto del sistema.
+  \item En procesamiento clásico, la CPU ya supera el tiempo real (150 FPS a
+        480p), por lo que la aceleración CUDA (432 FPS, 2\,\% de utilización,
+        172\,MiB de VRAM) solo se justifica en resoluciones mayores, múltiples
+        flujos o pipelines más profundos; el diseño de una única subida y una
+        única bajada por cuadro fue la condición necesaria para que la GPU
+        ganara en este caso.
+\end{enumerate}

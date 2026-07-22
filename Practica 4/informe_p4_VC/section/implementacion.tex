@@ -1,0 +1,171 @@
+% ============================================================
+\section{Implementación}
+% ============================================================
+
+\subsection{Caso A: Dependencias, Selección de Dispositivo y Entrenamiento}
+
+La instalación de dependencias en el entorno Python se reduce a dos paquetes
+(Roboflow para descargar el dataset y Ultralytics para el modelo):
+
+\begin{lstlisting}[style=code, language=bash]
+pip install -q -U roboflow ultralytics
+\end{lstlisting}
+
+La selección explícita del dispositivo de cómputo se realiza consultando a
+PyTorch; el mismo cuaderno corre en GPU o CPU sin cambios adicionales:
+
+\begin{lstlisting}[style=code, language=Python]
+import torch
+
+print("PyTorch:", torch.__version__)
+print("CUDA disponible:", torch.cuda.is_available())
+
+device = 0 if torch.cuda.is_available() else "cpu"
+\end{lstlisting}
+
+El fine-tuning parte de los pesos preentrenados y apunta al \texttt{data.yaml}
+exportado por Roboflow (rutas de \texttt{train/valid/test} y clases):
+
+\begin{lstlisting}[style=code, language=Python]
+from ultralytics import YOLO
+
+model = YOLO("yolo26n-seg.pt")
+
+train_results = model.train(
+    data=str(YOLO_ROOT / "data.yaml"),
+    epochs=60, imgsz=640, batch=16,
+    device=device, patience=15,
+    project="runs_practica4", name="yolo26n_seg_tools",
+    pretrained=True,
+)
+
+metrics = model.val(data=str(YOLO_ROOT / "data.yaml"))
+\end{lstlisting}
+
+Para el benchmark de inferencia, toda medición sincroniza CUDA antes y después
+del cronómetro; omitir esta sincronización subestimaría la latencia real, pues
+los lanzamientos de kernels son asíncronos:
+
+\begin{lstlisting}[style=code, language=Python]
+def predict_timed(model, images, device, imgsz, half=False):
+    if device == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    model.predict(images, device=device, imgsz=imgsz,
+                  half=half, verbose=False, conf=0.4)
+    if device == "cuda":
+        torch.cuda.synchronize()
+    return (time.perf_counter() - t0) * 1000.0
+\end{lstlisting}
+
+\subsection{Caso B: Scripts de Inferencia en Video}
+
+Cada combinación modelo/dispositivo se ejecuta cambiando dos constantes del
+script \texttt{run\_yolo.py}; el FPS instantáneo se calcula por diferencia de
+tiempos entre cuadros y se superpone al video anotado:
+
+\begin{lstlisting}[style=code, language=Python]
+MODEL_NAME = "yolo12n"   # "yolo12n" o "yolo26n"
+DEVICE     = "cpu"       # "cuda" o "cpu"
+
+model = YOLO(str(MODEL_PATH))
+results = model.predict(frame, device=DEVICE, conf=0.4, verbose=False)
+
+fps = 1.0 / max(now - prev_t, 1e-6)
+\end{lstlisting}
+
+Para Real-ESRGAN (\texttt{run\_superres.py}) el dispositivo se pasa
+directamente a PyTorch; en GPU se activa media precisión (FP16) y se procesa
+por mosaicos (\texttt{tile=128}) para no exceder la VRAM:
+
+\begin{lstlisting}[style=code, language=Python]
+model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64,
+                num_block=23, num_grow_ch=32, scale=4)
+upsampler = RealESRGANer(
+    scale=4, model_path=str(MODEL_PATH), model=model,
+    tile=128,
+    half=(DEVICE == "cuda"),
+    device=torch.device(DEVICE),
+)
+mejorado, _ = upsampler.enhance(crop, outscale=4)
+\end{lstlisting}
+
+\subsection{Caso C: Compilación y Vinculación de Librerías CUDA}
+
+La infraestructura de compilación usa CMake orquestado por un Makefile. En el
+laboratorio, OpenCV con CUDA (\texttt{WITH\_CUDA=ON} + \texttt{opencv\_contrib})
+está \textbf{instalado a nivel de sistema}, por lo que
+\texttt{find\_package(OpenCV)} lo localiza directamente y el objetivo GPU se
+habilita de forma automática; los flags de inclusión y enlace contra las
+librerías CUDA de OpenCV (\texttt{opencv\_cudaimgproc},
+\texttt{opencv\_cudafilters}, \texttt{opencv\_cudaarithm}) los propaga CMake a
+través de \texttt{\$\{OpenCV\_LIBS\}}:
+
+\begin{lstlisting}[style=code]
+cmake_minimum_required(VERSION 3.16)
+project(Practica4Parte1C CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+# Laboratorio: OpenCV con CUDA instalado en el sistema;
+# find_package lo encuentra sin fijar OpenCV_DIR.
+find_package(OpenCV REQUIRED)
+
+add_executable(preprocesamiento_cpu src/pipeline_cpu.cpp)
+target_link_libraries(preprocesamiento_cpu PRIVATE ${OpenCV_LIBS})
+target_compile_options(preprocesamiento_cpu PRIVATE -O2 -Wall -Wextra)
+
+if(OpenCV_CUDA_VERSION)   # solo si la build tiene WITH_CUDA=ON
+    add_executable(preprocesamiento_gpu src/pipeline_gpu.cpp)
+    target_link_libraries(preprocesamiento_gpu PRIVATE ${OpenCV_LIBS})
+    target_compile_options(preprocesamiento_gpu PRIVATE -O2 -Wall -Wextra)
+endif()
+\end{lstlisting}
+
+El Makefile expone los objetivos de compilación y ejecución:
+
+\begin{lstlisting}[style=code]
+all:
+	cmake -B build -DCMAKE_BUILD_TYPE=Release -Wno-dev
+	cmake --build build -j$(nproc)
+
+run-cpu: all
+	./build/preprocesamiento_cpu
+
+run-gpu: all
+	./build/preprocesamiento_gpu
+
+clean:
+	rm -rf build
+\end{lstlisting}
+
+\begin{lstlisting}[style=code, language=bash]
+# Compilar y ejecutar en el laboratorio:
+make            # configura y compila ambos ejecutables
+make run-cpu    # pipeline sobre cv::Mat
+make run-gpu    # pipeline sobre cv::cuda::GpuMat
+\end{lstlisting}
+
+El núcleo del programa GPU minimiza las transferencias PCIe: el cuadro sube una
+sola vez a VRAM, las seis operaciones se encadenan sobre \texttt{GpuMat} y solo
+el resultado final regresa a RAM:
+
+\begin{lstlisting}[style=code, language=C++]
+d_frame.upload(frame);                                   // CPU -> GPU (unica subida)
+cv::cuda::cvtColor(d_frame, d_gris, cv::COLOR_BGR2GRAY);
+gaussianFilter->apply(d_gris, d_suavizado);
+erodeFilter->apply(d_suavizado, d_erosionado);
+dilateFilter->apply(d_erosionado, d_dilatado);
+cannyDetector->detect(d_dilatado, d_bordes);
+cv::cuda::equalizeHist(d_dilatado, d_ecualizado);
+d_resultado.download(resultado);                         // GPU -> CPU (unica bajada)
+\end{lstlisting}
+
+Antes de procesar, el programa valida la presencia de un dispositivo CUDA:
+
+\begin{lstlisting}[style=code, language=C++]
+if (cv::cuda::getCudaEnabledDeviceCount() == 0) {
+    std::cerr << "No se detecto GPU CUDA-capable via OpenCV.\n";
+    return 1;
+}
+cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
+\end{lstlisting}
