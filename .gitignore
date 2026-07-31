@@ -1,12 +1,39 @@
-# Python-generated files
+# ── Sistema ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
-*.py[oc]
-build/
+*.py[cod]
+*.pyo
+.venv/
+venv/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.ipynb_checkpoints/
 
-.vscode
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Virtual environments
-.venv
+# ── C/C++ compilado ────────────────────────────────────────────────────────────
+*.o
+*.a
+*.so
+*.out
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+build/
+
+# ── Proyecto Final SVM HOG: datasets, videos e informe (pesados / no se suben) ─
+Proyecto Final SVM HOG/artifcats/
+Proyecto Final SVM HOG/entrenamiento/
+Proyecto Final SVM HOG/entrenamiento_camion_grande/dataset/
+Proyecto Final SVM HOG/Informe_pf_vision/
+Proyecto Final SVM HOG/TruCKDetector_BoT_1/
+*.ipynb.bak
