@@ -2,6 +2,7 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/xobjdetect.hpp>
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
@@ -12,9 +13,10 @@
 #include <sys/resource.h>
 #include <vector>
 
-// Reproductor con detección HOG+SVM (frontal + lateral) sobre un video precargado.
-// Uso: ./truck_trigger_video [video] [umbral] [detector_frontal.yml] [detector_lateral.yml]
-// Formatos: cualquiera soportado por OpenCV/FFmpeg (mp4, webm, avi, mkv, mov, ...).
+// Reproductor con detección HOG+SVM (frontal + lateral) sobre video o cámara.
+// Uso: ./truck_trigger_video [video|camera:0|0] [umbral] [detector.yml] ...
+// Formatos: cualquiera soportado por OpenCV/FFmpeg (mp4, webm, avi, mkv, mov, ...)
+// o cámara local usando camera:0, camera:1, etc.
 //
 // Controles (con la ventana en foco):
 //   espacio  pausa / reanuda
@@ -22,7 +24,7 @@
 //   .        avanzar 1 frame (en pausa)
 //   r        reiniciar desde el inicio
 //   q        salir
-//   barra    saltar a cualquier punto del video
+//   barra    saltar a cualquier punto del video (solo archivos)
 
 static const char* kWindow = "Detector Camion - Video (HOG+SVM, frontal+lateral)";
 namespace fs = std::filesystem;
@@ -66,6 +68,28 @@ static double rectIoU(const cv::Rect& a, const cv::Rect& b) {
 
 static bool shouldSendAlerts(const std::string& serverUrl) {
     return !serverUrl.empty() && serverUrl != "none" && serverUrl != "off";
+}
+
+static bool parseCameraSource(const std::string& source, int& cameraIndex) {
+    std::string value = source;
+    const std::string cameraPrefix = "camera:";
+    const std::string camPrefix = "cam:";
+
+    if (value.rfind(cameraPrefix, 0) == 0) {
+        value = value.substr(cameraPrefix.size());
+    } else if (value.rfind(camPrefix, 0) == 0) {
+        value = value.substr(camPrefix.size());
+    } else {
+        const bool numericOnly = !value.empty() &&
+            std::all_of(value.begin(), value.end(), [](unsigned char c) {
+                return std::isdigit(c) != 0;
+            });
+        if (!numericOnly) return false;
+    }
+
+    if (value.empty()) value = "0";
+    cameraIndex = std::stoi(value);
+    return true;
 }
 
 static fs::path writeAlertClip(const std::deque<cv::Mat>& recentFrames,
@@ -212,6 +236,10 @@ int main(int argc, char** argv) {
     const double iouMin            = (argc > 15) ? std::stod(argv[15]) : 0.3;
     const std::string serverUrl    = (argc > 16) ? argv[16] : "none";
     const double alertCooldownSec  = (argc > 17) ? std::stod(argv[17]) : 1.0;
+    const std::string frontalPath  = (argc > 18) ? argv[18] : "";
+    const std::string frontalThresholdArg = (argc > 19) ? argv[19] : "auto";
+    const float frontalThresholdOverride =
+        (frontalThresholdArg == "auto") ? -1001.0f : std::stof(frontalThresholdArg);
 
     std::cout << "Configuracion alerta: threshold=" << thresholdOverride
               << " cooldown=" << alertCooldownSec << "s"
@@ -219,22 +247,42 @@ int main(int argc, char** argv) {
 
     std::vector<ViewDetector> detectors;
     loadDetector(lateralPath, "lateral", thresholdOverride, detectors);
+    if (!frontalPath.empty() && frontalPath != "none" && frontalPath != "off") {
+        loadDetector(frontalPath, "frontal", frontalThresholdOverride, detectors);
+    }
     if (detectors.empty()) {
         std::cerr << "No se cargó ningún detector\n";
         return 1;
     }
 
-    cv::VideoCapture cap(videoPath);
+    int cameraIndex = 0;
+    const bool useCamera = parseCameraSource(videoPath, cameraIndex);
+    cv::VideoCapture cap;
+    if (useCamera) {
+        cap.open(cameraIndex);
+        cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
+        cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+        cap.set(cv::CAP_PROP_FPS, 30);
+    } else {
+        cap.open(videoPath);
+    }
     if (!cap.isOpened()) {
-        std::cerr << "No se pudo abrir el video: " << videoPath << "\n";
+        if (useCamera) {
+            std::cerr << "No se pudo abrir la camara con indice: " << cameraIndex << "\n";
+        } else {
+            std::cerr << "No se pudo abrir el video: " << videoPath << "\n";
+        }
         return 1;
     }
-    const int totalFrames = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
+    const int totalFrames = useCamera ? 0 : static_cast<int>(cap.get(cv::CAP_PROP_FRAME_COUNT));
     double videoFps = cap.get(cv::CAP_PROP_FPS);
     if (videoFps <= 0) videoFps = 30.0;
+    std::cout << "Fuente de entrada: "
+              << (useCamera ? ("camara " + std::to_string(cameraIndex)) : videoPath)
+              << " | fps=" << videoFps << "\n";
 
     cv::namedWindow(kWindow);
-    if (totalFrames > 0)
+    if (!useCamera && totalFrames > 0)
         cv::createTrackbar("posicion", kWindow, nullptr, totalFrames - 1, onTrackbar);
 
     bool paused = false;
@@ -251,7 +299,7 @@ int main(int argc, char** argv) {
 
     while (true) {
         if (g_seekRequested) {
-            cap.set(cv::CAP_PROP_POS_FRAMES, g_seekTarget);
+            if (!useCamera) cap.set(cv::CAP_PROP_POS_FRAMES, g_seekTarget);
             g_seekRequested = false;
             display.release();  // fuerza a procesar el frame nuevo aunque esté en pausa
             history.clear();    // el historial de otro tramo del video ya no aplica
@@ -276,13 +324,17 @@ int main(int argc, char** argv) {
 
             std::vector<cv::Rect> boxes;
             std::vector<double> weights;
+            std::vector<std::string> views;
             for (const auto& vd : detectors) {
                 std::vector<cv::Rect> b;
                 std::vector<double> w;
                 vd.hog.detectMultiScale(gray, b, w, vd.threshold, cv::Size(8, 8),
                                          cv::Size(32, 32), 1.1, 4.0, false);
-                boxes.insert(boxes.end(), b.begin(), b.end());
-                weights.insert(weights.end(), w.begin(), w.end());
+                for (size_t j = 0; j < b.size(); ++j) {
+                    boxes.push_back(b[j]);
+                    weights.push_back(w[j]);
+                    views.push_back(vd.name);
+                }
             }
 
             int confirmedBoxes = 0;
@@ -309,7 +361,7 @@ int main(int argc, char** argv) {
                     ++confirmedBoxes;
                     bestConfidence = std::max(bestConfidence, weights[i]);
                     cv::rectangle(frame, boxes[i], cv::Scalar(0, 255, 0), 2);
-                    char label[32];
+                    char label[64];
                     std::snprintf(label, sizeof(label), "camion %.2f", weights[i]);
                     cv::putText(frame, label, boxes[i].tl() + cv::Point(0, -6),
                                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
@@ -342,8 +394,13 @@ int main(int argc, char** argv) {
 
             const int curFrame = static_cast<int>(cap.get(cv::CAP_PROP_POS_FRAMES));
             char info[96];
-            std::snprintf(info, sizeof(info), "FPS: %.1f  |  %.1fs / %.1fs  [esp:pausa a/d:+-5s q:salir]",
-                          fps, curFrame / videoFps, totalFrames / videoFps);
+            if (useCamera) {
+                std::snprintf(info, sizeof(info), "FPS: %.1f  |  CAMARA %d  [esp:pausa q:salir]",
+                              fps, cameraIndex);
+            } else {
+                std::snprintf(info, sizeof(info), "FPS: %.1f  |  %.1fs / %.1fs  [esp:pausa a/d:+-5s q:salir]",
+                              fps, curFrame / videoFps, totalFrames / videoFps);
+            }
             cv::putText(frame, info, cv::Point(10, 25), cv::FONT_HERSHEY_SIMPLEX,
                         0.5, cv::Scalar(0, 0, 255), 2);
             char metrics[128];
@@ -369,7 +426,7 @@ int main(int argc, char** argv) {
 
             display = frame.clone();
 
-            if (totalFrames > 0) {
+            if (!useCamera && totalFrames > 0) {
                 g_ignoreTrackbar = true;
                 cv::setTrackbarPos("posicion", kWindow, curFrame);
                 g_ignoreTrackbar = false;
@@ -388,7 +445,7 @@ int main(int argc, char** argv) {
         const int key = cv::waitKey(paused ? 30 : 1);
         if (key == 'q') break;
         if (key == ' ') paused = !paused;
-        if (key == 'a' || key == 'd') {
+        if (!useCamera && (key == 'a' || key == 'd')) {
             const double cur   = cap.get(cv::CAP_PROP_POS_FRAMES);
             const double delta = 5.0 * videoFps * (key == 'd' ? 1.0 : -1.0);
             const double maxF  = (totalFrames > 0) ? totalFrames - 1.0 : cur + delta;
@@ -396,7 +453,7 @@ int main(int argc, char** argv) {
             display.release();
             history.clear();
         }
-        if (key == 'r') {
+        if (!useCamera && key == 'r') {
             cap.set(cv::CAP_PROP_POS_FRAMES, 0);
             display.release();
             history.clear();
