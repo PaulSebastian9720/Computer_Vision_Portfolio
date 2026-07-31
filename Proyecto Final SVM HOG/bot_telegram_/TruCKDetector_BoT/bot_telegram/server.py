@@ -8,6 +8,8 @@ import logging
 import os
 import uvicorn
 import shutil
+import time
+import resource
 from fastapi import FastAPI, HTTPException, File, Form, Request, UploadFile
 from pydantic import BaseModel
 from pathlib import Path
@@ -15,7 +17,7 @@ import asyncio
 import json
 import cv2
 
-from config import TELEGRAM_BOT_TOKEN, OUTPUTS_DIR, DETECTIONS_DIR, SEGMENTATIONS_DIR, VIDEOS_DIR
+from config import TELEGRAM_BOT_TOKEN, OUTPUTS_DIR, DETECTIONS_DIR, SEGMENTATIONS_DIR, VIDEOS_DIR, LOGS_DIR
 from truck_detector import TruckDetector
 from video_processor import VideoProcessor
 from telegram import Bot
@@ -34,6 +36,9 @@ def load_subscribers():
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler(LOGS_DIR / "server_metrics.log")
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 
 from contextlib import asynccontextmanager
 
@@ -47,7 +52,7 @@ async def lifespan(app: FastAPI):
     video_processor = VideoProcessor(truck_detector)
     telegram_bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-    logger.info("✅ Servidor listo para recibir peticiones del detector C++.")
+    logger.info("Servidor listo para recibir peticiones del detector C++.")
     yield
     logger.info("Cerrando servidor...")
 
@@ -62,6 +67,13 @@ telegram_bot = None
 
 class DetectionRequest(BaseModel):
     file_path: str
+
+
+def _memory_mb() -> float:
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if os.uname().sysname == "Darwin":
+        return rss / (1024 * 1024)
+    return rss / 1024
 
 
 def _detection_score(detection_result: dict) -> tuple:
@@ -207,6 +219,7 @@ async def detect_vehicle(
     de la petición de red (multipart/form-data), lo guarda temporalmente y lo procesa.
     """
     try:
+        request_started = time.perf_counter()
         clip_file_path = None
         hog_file_path = None
 
@@ -217,19 +230,19 @@ async def detect_vehicle(
             temp_file_path = temp_dir / filename
             with open(temp_file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
-            logger.info(f"📥 Archivo recibido vía API: {filename} -> {temp_file_path}")
+            logger.info(f"Archivo recibido via API: {filename} -> {temp_file_path}")
 
             if hog_file is not None:
                 hog_file_path = temp_dir / hog_file.filename
                 with open(hog_file_path, "wb") as buffer:
                     shutil.copyfileobj(hog_file.file, buffer)
-                logger.info(f"🟨 Frame HOG recibido vía API: {hog_file.filename} -> {hog_file_path}")
+                logger.info(f"Frame HOG recibido via API: {hog_file.filename} -> {hog_file_path}")
 
             if clip is not None:
                 clip_file_path = temp_dir / clip.filename
                 with open(clip_file_path, "wb") as buffer:
                     shutil.copyfileobj(clip.file, buffer)
-                logger.info(f"🎞️ Clip recibido vía API: {clip.filename} -> {clip_file_path}")
+                logger.info(f"Clip recibido via API: {clip.filename} -> {clip_file_path}")
         else:
             payload = await request.json()
             file_path = payload.get("file_path")
@@ -238,7 +251,7 @@ async def detect_vehicle(
             temp_file_path = Path(file_path)
             if not temp_file_path.exists():
                 raise HTTPException(status_code=404, detail=f"No existe: {temp_file_path}")
-            logger.info(f"📥 Archivo recibido por ruta local desde C++: {temp_file_path}")
+            logger.info(f"Archivo recibido por ruta local desde C++: {temp_file_path}")
 
         lower_suffix = temp_file_path.suffix.lower()
         hog_filters = _make_hog_filters(
@@ -264,6 +277,15 @@ async def detect_vehicle(
         else:
             raise HTTPException(status_code=400, detail=f"Formato no soportado: {lower_suffix}")
 
+        elapsed = time.perf_counter() - request_started
+        logger.info(
+            "API stream procesado: type=%s clip=%s hog_file=%s latency=%.2fs ram=%.1fMB",
+            lower_suffix,
+            clip_file_path is not None,
+            hog_file_path is not None,
+            elapsed,
+            _memory_mb(),
+        )
         return {"status": "success", "message": "Procesado y enviado a Telegram"}
 
     except Exception as e:
@@ -280,17 +302,20 @@ async def process_image(
     hog_count=None,
 ):
     """Procesar imagen: detectar vehículos con YOLO y enviar a Telegram."""
+    process_started = time.perf_counter()
     image = cv2.imread(str(image_path))
     if image is None:
         raise ValueError("Error leyendo imagen")
 
     # Detectar la captura exacta del disparo. Si viene clip, usar el mejor frame
     # del clip para que la evidencia HOG y la evidencia YOLO sean del mismo momento.
+    infer_started = time.perf_counter()
     detection_result = truck_detector.detect(
         image,
         hog_threshold=hog_threshold,
         hog_filters=hog_filters,
     )
+    infer_elapsed = max(time.perf_counter() - infer_started, 1e-6)
     hog_image_source = image
     hog_result = detection_result
     yolo_image = image
@@ -341,6 +366,17 @@ async def process_image(
         hog_summary = truck_detector.get_hog_summary_text(hog_result)
     yolo_summary = truck_detector.get_summary_text(yolo_result)
     stats = truck_detector.get_statistics(yolo_result)
+    logger.info(
+        "YOLO imagen: inference_fps=%.2f ram=%.1fMB objects=%d vehicles=%d trucks=%d avg_conf=%.2f max_conf=%.2f hog_candidates=%s",
+        1.0 / infer_elapsed,
+        _memory_mb(),
+        num_objects,
+        num_vehicles,
+        num_trucks,
+        stats['avg_confidence'],
+        stats['max_confidence'],
+        hog_count if hog_count is not None else yolo_result.get('num_hog_triggers', 0),
+    )
 
     # Enviar a todos los suscriptores en Telegram
     subscribers = load_subscribers()
@@ -390,7 +426,12 @@ async def process_image(
                     parse_mode='Markdown',
                 )
 
-        logger.info(f"✅ Enviado a {len(subscribers)} suscriptor(es): {num_vehicles} vehículos, {num_trucks} camiones")
+        logger.info(f"Enviado a {len(subscribers)} suscriptor(es): {num_vehicles} vehículos, {num_trucks} camiones")
+        logger.info(
+            "Telegram entrega completa: fotos=2 video=1 total_time=%.2fs ram=%.1fMB",
+            time.perf_counter() - process_started,
+            _memory_mb(),
+        )
 
     except Exception as e:
         logger.error(f"Error enviando a Telegram: {e}")
@@ -398,6 +439,7 @@ async def process_image(
 
 async def process_video(video_path: Path):
     """Procesar video: detectar vehículos frame a frame y enviar a Telegram."""
+    process_started = time.perf_counter()
     subscribers = load_subscribers()
 
     try:
@@ -407,12 +449,22 @@ async def process_video(video_path: Path):
         # Procesar video completo
         original_path, seg_video_path = video_processor.process_video_file(str(video_path))
         video_info = video_processor.get_video_info(seg_video_path)
+        elapsed = max(time.perf_counter() - process_started, 1e-6)
+        processed_fps = video_info.get('total_frames', 0) / elapsed
 
         caption = (
             f"🎥 *Video Analizado con YOLOv8*\n"
             f"⏱️ Duración: {video_info.get('duration', 0):.1f}s\n"
             f"🎞️ Frames: {video_info.get('total_frames', 0)}\n"
             f"📊 FPS: {video_info.get('fps', 0)}"
+        )
+        logger.info(
+            "YOLO video: frames=%d video_fps=%s processed_fps=%.2f ram=%.1fMB latency=%.2fs",
+            video_info.get('total_frames', 0),
+            video_info.get('fps', 0),
+            processed_fps,
+            _memory_mb(),
+            elapsed,
         )
 
         for chat_id in subscribers:
@@ -432,7 +484,7 @@ async def process_video(video_path: Path):
                     parse_mode='Markdown',
                 )
 
-        logger.info(f"✅ Video procesado y enviado a {len(subscribers)} suscriptor(es)")
+        logger.info(f"Video procesado y enviado a {len(subscribers)} suscriptor(es)")
 
     except Exception as e:
         logger.error(f"Error procesando video: {e}")

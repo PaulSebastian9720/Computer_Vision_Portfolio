@@ -382,16 +382,16 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application: Application):
     """Ejecutar después de inicializar la aplicación."""
-    logger.info("🤖 Bot de Monitoreo Vial iniciado correctamente")
-    logger.info(f"📁 Detecciones: {DETECTIONS_DIR}")
-    logger.info(f"📁 Segmentaciones: {SEGMENTATIONS_DIR}")
-    logger.info(f"📁 Videos: {VIDEOS_DIR}")
+    logger.info("Bot de Monitoreo Vial iniciado correctamente")
+    logger.info(f"Detecciones: {DETECTIONS_DIR}")
+    logger.info(f"Segmentaciones: {SEGMENTATIONS_DIR}")
+    logger.info(f"Videos: {VIDEOS_DIR}")
 
 
 def main():
     """Función principal."""
     if not TELEGRAM_BOT_TOKEN:
-        logger.error("⚠️ TELEGRAM_BOT_TOKEN no configurado!")
+        logger.error("TELEGRAM_BOT_TOKEN no configurado!")
         logger.error("Configura tu token en el archivo .env")
         return
 
@@ -415,7 +415,7 @@ def main():
 
     application.post_init = post_init
 
-    logger.info("🚀 Iniciando bot de Telegram...")
+    logger.info("Iniciando bot de Telegram...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

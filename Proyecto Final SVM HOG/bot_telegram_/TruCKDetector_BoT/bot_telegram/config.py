@@ -23,9 +23,10 @@ OUTPUTS_DIR = BASE_DIR.parent / 'outputs'
 DETECTIONS_DIR = OUTPUTS_DIR / 'detections'
 SEGMENTATIONS_DIR = OUTPUTS_DIR / 'segmentations'
 VIDEOS_DIR = OUTPUTS_DIR / 'videos'
+LOGS_DIR = PROJECT_ROOT / 'logs'
 
 # Crear directorios si no existen
-for directory in [OUTPUTS_DIR, DETECTIONS_DIR, SEGMENTATIONS_DIR, VIDEOS_DIR]:
+for directory in [OUTPUTS_DIR, DETECTIONS_DIR, SEGMENTATIONS_DIR, VIDEOS_DIR, LOGS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
 
 # ============= MODELO YOLO =============
